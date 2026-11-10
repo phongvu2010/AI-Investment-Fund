@@ -350,3 +350,17 @@ class FundTelegramBot:
             parse_mode="HTML",
             reply_markup=reply_markup
         )
+
+def main():
+    bot = FundTelegramBot()
+    if not bot.token:
+        print("❌ Chưa cấu hình TELEGRAM_BOT_TOKEN trong file .env!")
+        print("💡 Hãy copy .env.example thành .env và điền Token từ @BotFather.")
+        return
+    print("🤖 Đang khởi chạy Telegram Bot của Quỹ Đầu tư AI...")
+    app = bot.build_application()
+    print("✅ Bot đang lắng nghe tin nhắn và nút bấm 24/7...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()

@@ -123,10 +123,12 @@ class BacktestRunner:
 
         # 4. Xuất Báo cáo HTML/Plotly tương tác
         html_report_path = None
+        html_filename = f"{strat_name.lower().replace(' ', '_')}.html"
+        html_report_rel = f"dashboard/reports/{html_filename}"
+
         if generate_html_report:
             try:
                 report_gen = vb.ReportGenerator()
-                html_filename = f"{strat_name.lower().replace(' ', '_')}.html"
                 full_html_path = self.reports_dir / html_filename
 
                 report_gen.generate_report(
@@ -138,8 +140,8 @@ class BacktestRunner:
                     strategy_name=strat_name,
                     filename=str(full_html_path)
                 )
-                html_report_path = str(full_html_path)
-                print(f"📊 Đã xuất biểu đồ tương tác: {html_report_path}")
+                html_report_path = html_report_rel
+                print(f"📊 Đã xuất biểu đồ tương tác: {html_report_rel}")
             except Exception as e:
                 print(f"⚠️ Không thể xuất HTML report: {e}")
 
@@ -151,5 +153,6 @@ class BacktestRunner:
             "equity_curve": raw_result["equity_curve"],
             "trades": raw_result["trades"],
             "html_report_path": html_report_path,
+            "html_filename": html_filename,
             "is_bankrupt": raw_result.get("is_bankrupt", False)
         }

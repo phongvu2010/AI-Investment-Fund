@@ -1,0 +1,31 @@
+# ====================================================================
+# DOCKERIGNORE CHO AI INVESTMENT FUND
+# ====================================================================
+
+# Version control
+.git
+.gitignore
+
+# Python cache & venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv
+venv
+env
+.pytest_cache
+
+# Node modules & local build
+node_modules
+dashboard/frontend/node_modules
+dashboard/frontend/dist
+
+# IDEs & OS
+.DS_Store
+.idea
+.vscode
+
+# Data & database (Đã được mount qua volumes trong docker-compose)
+*.parquet
+database/*.db

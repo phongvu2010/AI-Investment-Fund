@@ -1,0 +1,57 @@
+services:
+  # -------------------------------------------------------------
+  # DỊCH VỤ 1: WEB DASHBOARD & REST API (REACT + FASTAPI)
+  # -------------------------------------------------------------
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fund-dashboard
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./database:/app/database
+      - ./.agent:/app/.agent
+      - ./dashboard/reports:/app/dashboard/reports
+      - ./config:/app/config
+    command: python dashboard/api.py
+
+  # -------------------------------------------------------------
+  # DỊCH VỤ 2: TELEGRAM BOT CO-PILOT (TƯƠNG TÁC DI ĐỘNG 24/7)
+  # -------------------------------------------------------------
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fund-bot
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./database:/app/database
+      - ./.agent:/app/.agent
+      - ./config:/app/config
+    command: python interfaces/telegram_bot.py
+
+  # -------------------------------------------------------------
+  # DỊCH VỤ 3: BỘ LẬP LỊCH TỰ ĐỘNG (SCHEDULER / CRON)
+  # -------------------------------------------------------------
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fund-scheduler
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./database:/app/database
+      - ./.agent:/app/.agent
+      - ./dashboard/reports:/app/dashboard/reports
+      - ./config:/app/config
+    command: python tools/scheduler.py

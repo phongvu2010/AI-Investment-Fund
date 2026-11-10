@@ -114,7 +114,8 @@ Chi tiết xem tại: [backtest_report.md](./backtest_report.md)
             "cagr_pct": cro_eval["cagr_pct"],
             "sharpe": cro_eval["sharpe"],
             "mdd_pct": cro_eval["mdd_pct"],
-            "html_report": result.get("html_report_path", "")
+            "html_report": result.get("html_report_path", ""),
+            "html_filename": result.get("html_filename", "")
         }
         with open(self.skill_dir / "status.json", "w", encoding="utf-8") as f:
             json.dump(status_info, f, indent=2, ensure_ascii=False)

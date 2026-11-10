@@ -103,6 +103,8 @@ class DatabaseManager:
         trade_date: Optional[str] = None
     ) -> str:
         """AI tạo lệnh đề xuất gửi Telegram cho Bạn"""
+        # Tự động chuẩn hóa đơn vị giá nếu ở dạng nghìn đồng (ví dụ 28.2 -> 28,200)
+        norm_proposed_price = proposed_price * 1000.0 if proposed_price < 1000.0 else proposed_price
         t_date = trade_date or date.today().strftime("%Y-%m-%d")
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{ticker}"
@@ -113,7 +115,7 @@ class DatabaseManager:
                     order_id, ticker, action, order_type, proposed_price, proposed_volume,
                     status, trade_date, memo_id, notes, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, 'PROPOSED', ?, ?, ?, ?);
-            """, (order_id, ticker.upper(), action.upper(), order_type, proposed_price, proposed_volume, t_date, memo_id, notes, now_str))
+            """, (order_id, ticker.upper(), action.upper(), order_type, norm_proposed_price, proposed_volume, t_date, memo_id, notes, now_str))
             conn.commit()
         return order_id
 
@@ -142,6 +144,8 @@ class DatabaseManager:
         2. Tính toán phí CTCK (0.15%), thuế TNCN (0.1% nếu bán), trượt giá (Slippage)
         3. Cập nhật số dư tiền mặt & danh mục cổ phiếu
         """
+        # Tự động chuẩn hóa đơn vị giá nếu ở dạng nghìn đồng (ví dụ 28.1 -> 28,100)
+        norm_executed_price = executed_price * 1000.0 if executed_price < 1000.0 else executed_price
         now_str = executed_at or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         with self.get_connection() as conn:
@@ -156,12 +160,12 @@ class DatabaseManager:
             proposed_volume = order["proposed_volume"]
 
             # Tính phí và thuế
-            trade_value = executed_price * executed_volume
+            trade_value = norm_executed_price * executed_volume
             fee = trade_value * settings.BROKER_FEE_RATE
             tax = trade_value * settings.SELL_TAX_RATE if action == "SELL" else 0.0
 
             # Tính trượt giá (Slippage %)
-            slippage_pct = ((executed_price - proposed_price) / proposed_price) * 100.0 if proposed_price > 0 else 0.0
+            slippage_pct = ((norm_executed_price - proposed_price) / proposed_price) * 100.0 if proposed_price > 0 else 0.0
 
             # Xác định trạng thái lệnh
             status = "FILLED" if executed_volume >= proposed_volume else "PARTIALLY_FILLED"
@@ -172,10 +176,10 @@ class DatabaseManager:
                 SET executed_price = ?, executed_volume = ?, status = ?,
                     fee = ?, tax = ?, slippage_pct = ?, executed_at = ?, notes = COALESCE(?, notes)
                 WHERE order_id = ?;
-            """, (executed_price, executed_volume, status, fee, tax, slippage_pct, now_str, notes, order_id))
+            """, (norm_executed_price, executed_volume, status, fee, tax, slippage_pct, now_str, notes, order_id))
 
             # 2. Cập nhật Danh mục & Tiền mặt
-            self._apply_trade_to_portfolio_and_cash(conn, ticker, action, executed_price, executed_volume, fee, tax, order["trade_date"])
+            self._apply_trade_to_portfolio_and_cash(conn, ticker, action, norm_executed_price, executed_volume, fee, tax, order["trade_date"])
 
             conn.commit()
 
@@ -183,7 +187,7 @@ class DatabaseManager:
             "order_id": order_id,
             "ticker": ticker,
             "action": action,
-            "executed_price": executed_price,
+            "executed_price": norm_executed_price,
             "executed_volume": executed_volume,
             "fee": fee,
             "tax": tax,
@@ -204,13 +208,15 @@ class DatabaseManager:
         Cơ chế Nhập bù trực tiếp:
         Dùng khi Bạn quên bấm xác nhận lúc 15h, tối hoặc sáng hôm sau nhập bù qua cú pháp /fill.
         """
+        # Tự động chuẩn hóa đơn vị giá nếu ở dạng nghìn đồng (ví dụ 28.2 -> 28,200)
+        norm_executed_price = executed_price * 1000.0 if executed_price < 1000.0 else executed_price
         t_date = trade_date or date.today().strftime("%Y-%m-%d")
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         order_id = f"FILL-{datetime.now().strftime('%Y%m%d%H%M%S')}-{ticker.upper()}"
 
         with self.get_connection() as conn:
             # Tạo bản ghi lệnh với trạng thái FILLED
-            trade_value = executed_price * executed_volume
+            trade_value = norm_executed_price * executed_volume
             fee = trade_value * settings.BROKER_FEE_RATE
             tax = trade_value * settings.SELL_TAX_RATE if action.upper() == "SELL" else 0.0
 
@@ -220,11 +226,11 @@ class DatabaseManager:
                     executed_price, executed_volume, status, fee, tax, slippage_pct,
                     trade_date, created_at, executed_at, notes
                 ) VALUES (?, ?, ?, 'LO', ?, ?, ?, ?, 'FILLED', ?, ?, 0.0, ?, ?, ?, ?);
-            """, (order_id, ticker.upper(), action.upper(), executed_price, executed_volume,
-                  executed_price, executed_volume, fee, tax, t_date, now_str, now_str, notes))
+            """, (order_id, ticker.upper(), action.upper(), norm_executed_price, executed_volume,
+                  norm_executed_price, executed_volume, fee, tax, t_date, now_str, now_str, notes))
 
             # Áp dụng thay đổi vào danh mục và tiền mặt
-            self._apply_trade_to_portfolio_and_cash(conn, ticker.upper(), action.upper(), executed_price, executed_volume, fee, tax, t_date)
+            self._apply_trade_to_portfolio_and_cash(conn, ticker.upper(), action.upper(), norm_executed_price, executed_volume, fee, tax, t_date)
             conn.commit()
 
         return order_id
@@ -339,7 +345,8 @@ class DatabaseManager:
                 q = int(row["quantity"])
                 avg_p = float(row["avg_buy_price"])
                 # Lấy giá đóng cửa mới nhất, nếu không có thì giữ giá vốn
-                close_p = current_prices.get(t, avg_p)
+                raw_close = current_prices.get(t, avg_p)
+                close_p = raw_close * 1000.0 if raw_close < 1000.0 else raw_close
 
                 mkt_val = q * close_p
                 unreal_pnl = mkt_val - (q * avg_p)

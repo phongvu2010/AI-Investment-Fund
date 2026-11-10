@@ -1,9 +1,9 @@
 # BÁO CÁO THẨM ĐỊNH CHIẾN LƯỢC ĐẦU TƯ: VSA MOMENTUM BREAKOUT (HPG)
 * **Mã cổ phiếu áp dụng:** `HPG`
-* **Thời gian kiểm nghiệm:** `4.8 năm` (1749 ngày giao dịch)
+* **Thời gian kiểm nghiệm:** `4.8 năm` (1747 ngày giao dịch)
 * **Vốn khởi điểm giả lập:** `1,000,000,000 VND`
 * **Vốn kết thúc (Equity):** `984,820,422 VND`
-* **Biểu đồ tương tác HTML:** `/Users/hunterdo/Documents/Python Project/AI Investment Fund/dashboard/reports/vsa_momentum_breakout_(hpg).html`
+* **Biểu đồ tương tác HTML:** [dashboard/reports/vsa_momentum_breakout_(hpg).html](../../../dashboard/reports/vsa_momentum_breakout_(hpg).html)
 
 ---
 
@@ -21,7 +21,7 @@
 | **Hệ số Lợi nhuận/Lỗ (Profit Factor)**| **0.00** | Tổng tiền thắng / Tổng tiền thua |
 | **Tổng Số Lệnh Khớp (Total Trades)**| **1 lệnh** | Độ tin cậy mẫu thống kê |
 | **Lãi Trung Bình Mỗi Lệnh** | **-1.52%** | Kỳ vọng sinh lời trung bình/deal |
-| **Thời Gian Nắm Giữ Trung Bình** | **13.4 ngày** | Chu kỳ nắm giữ vị thế ($T+2.5$) |
+| **Thời Gian Nắm Giữ Trung Bình** | **12.5 ngày** | Chu kỳ nắm giữ vị thế ($T+2.5$) |
 
 ---
 

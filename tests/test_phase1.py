@@ -80,7 +80,7 @@ def run_tests():
         executed_price=28.1,
         executed_volume=5000
     )
-    print(f"3. Khớp thực tế: {fill_res['executed_volume']:,} HPG @ {fill_res['executed_price']:,.2f} k")
+    print(f"3. Khớp thực tế: {fill_res['executed_volume']:,} HPG @ {fill_res['executed_price']:,.0f} VND")
     print(f"   Phí giao dịch (0.15%): {fill_res['fee']:,.0f} VND | Trượt giá: {fill_res['slippage_pct']:.2f}%")
 
     cash_after_buy = db.get_current_cash()
@@ -90,7 +90,7 @@ def run_tests():
     # BƯỚC 4: MÔ PHỎNG CƠ CHẾ NHẬP BÙ (RETROACTIVE FILL)
     # ----------------------------------------------------
     print("\n[TEST 4] Mô phỏng Cơ chế Nhập bù Hồi tố (SSI)...")
-    # Tối bạn rảnh nhập bù 3.000 SSI giá 32.000
+    # Tối bạn rảnh nhập bù 3.000 SSI giá 32.000 (gõ 32.0)
     retro_order_id = db.record_retroactive_fill(
         ticker="SSI",
         action="BUY",
@@ -104,7 +104,7 @@ def run_tests():
     portfolio = db.get_portfolio()
     print(f"\n📊 DANH MỤC HIỆN TẠI ({len(portfolio)} mã):")
     for item in portfolio:
-        print(f"   • {item['ticker']}: {item['quantity']:,} CP | Giá vốn: {item['avg_buy_price']:,.2f} | Giá trị: {item['market_value']:,.0f} VND")
+        print(f"   • {item['ticker']}: {item['quantity']:,} CP | Giá vốn: {item['avg_buy_price']:,.0f} VND | Giá trị: {item['market_value']:,.0f} VND")
 
     assert len(portfolio) == 2, f"Danh mục phải có 2 mã (HPG, SSI), thực tế: {len(portfolio)}"
 
@@ -112,7 +112,7 @@ def run_tests():
     # BƯỚC 5: CHỐT SỔ KẾ TOÁN NAV HÀNG NGÀY (EOD)
     # ----------------------------------------------------
     print("\n[TEST 5] Chốt sổ Kế toán NAV Cuối ngày (Mark-to-Market)...")
-    # Giả lập giá đóng cửa hôm nay: HPG tăng lên 28.5, SSI tăng lên 32.5
+    # Giả lập giá đóng cửa hôm nay: HPG tăng lên 28.5 (28,500 đ), SSI tăng lên 32.5 (32,500 đ)
     market_prices = {"HPG": 28.5, "SSI": 32.5}
     nav_report = db.close_daily_nav(
         trade_date="2026-11-03",

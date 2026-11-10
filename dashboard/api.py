@@ -122,8 +122,11 @@ def get_strategy_reports():
                     try:
                         with open(status_file, "r", encoding="utf-8") as f:
                             info = json.load(f)
-                            # Kiểm tra đường dẫn HTML report tương đối
-                            html_name = f"{info['title'].lower().replace(' ', '_')}.html"
+                            # Trích xuất tên file HTML an toàn độc lập hệ điều hành
+                            raw_report = info.get("html_report", "")
+                            html_name = info.get("html_filename") or Path(raw_report).name
+                            if not html_name or html_name == ".":
+                                html_name = f"{info['title'].lower().replace(' ', '_')}.html"
                             info["html_url"] = f"/static/reports/{html_name}"
                             reports.append(info)
                     except Exception:

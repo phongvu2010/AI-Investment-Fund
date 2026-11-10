@@ -6,8 +6,9 @@
   ],
   "cro_status": "REJECTED",
   "verdict": "CHIẾN LƯỢC BỊ TỪ CHỐI (Không đạt tiêu chuẩn kiểm soát rủi ro của Quỹ)",
-  "cagr_pct": -0.31892157860882175,
-  "sharpe": -2.0391016763331002,
+  "cagr_pct": -0.31928610282181413,
+  "sharpe": -2.039273779928928,
   "mdd_pct": 4.456435479999995,
-  "html_report": "/Users/hunterdo/Documents/Python Project/AI Investment Fund/dashboard/reports/vsa_momentum_breakout_(hpg).html"
+  "html_report": "dashboard/reports/vsa_momentum_breakout_(hpg).html",
+  "html_filename": "vsa_momentum_breakout_(hpg).html"
 }

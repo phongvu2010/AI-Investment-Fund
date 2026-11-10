@@ -73,13 +73,14 @@ class BacktestReportAdapter:
         avg_trade_return_pct = metrics.get("avg_trade_return", 0.0) * 100.0
         avg_hold_days = metrics.get("avg_hold_days", 0.0)
         html_report_path = backtest_result.get("html_report_path", "")
+        html_filename = backtest_result.get("html_filename", Path(html_report_path).name if html_report_path else "")
 
         md_content = f"""# BÁO CÁO THẨM ĐỊNH CHIẾN LƯỢC ĐẦU TƯ: {strat_name.upper()}
 * **Mã cổ phiếu áp dụng:** `{tickers}`
 * **Thời gian kiểm nghiệm:** `{metrics.get('years', 0):.1f} năm` ({metrics.get('duration_days', 0)} ngày giao dịch)
 * **Vốn khởi điểm giả lập:** `{metrics.get('initial_cash', 0):,.0f} VND`
 * **Vốn kết thúc (Equity):** `{metrics.get('final_equity', 0):,.0f} VND`
-* **Biểu đồ tương tác HTML:** `{html_report_path}`
+* **Biểu đồ tương tác HTML:** [dashboard/reports/{html_filename}](../../../dashboard/reports/{html_filename})
 
 ---
 
