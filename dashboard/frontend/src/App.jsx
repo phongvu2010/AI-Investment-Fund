@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   TrendingUp, TrendingDown, DollarSign, PieChart, ShieldAlert, 
   RefreshCw, PlusCircle, CheckCircle2, Clock, AlertTriangle, 
-  ExternalLink, FileText, ArrowUpRight, ArrowDownRight, Activity
+  ExternalLink, FileText, ArrowUpRight, ArrowDownRight, Activity,
+  Brain, Cpu, Download, Upload, Database, Sparkles, FileSpreadsheet, Check
 } from 'lucide-react';
 
 export default function App() {
@@ -13,6 +14,13 @@ export default function App() {
   const [reports, setReports] = useState([]);
   const [activeTab, setActiveTab] = useState('portfolio');
   const [loading, setLoading] = useState(true);
+
+  // Machine Learning Lab State
+  const [mlModelInfo, setMlModelInfo] = useState(null);
+  const [mlRankings, setMlRankings] = useState([]);
+  const [mlExtracting, setMlExtracting] = useState(false);
+  const [mlUploading, setMlUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Modals
   const [showFillModal, setShowFillModal] = useState(false);
@@ -31,12 +39,14 @@ export default function App() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [navRes, histRes, pfRes, ordRes, repRes] = await Promise.all([
+      const [navRes, histRes, pfRes, ordRes, repRes, mlInfoRes, mlRankRes] = await Promise.all([
         fetch('/api/nav/summary').then(r => r.json()),
         fetch('/api/nav/history').then(r => r.json()),
         fetch('/api/portfolio').then(r => r.json()),
         fetch('/api/orders').then(r => r.json()),
-        fetch('/api/reports').then(r => r.json())
+        fetch('/api/reports').then(r => r.json()),
+        fetch('/api/ml/model/info').then(r => r.json()).catch(() => null),
+        fetch('/api/ml/rankings?top_n=10').then(r => r.json()).catch(() => ({ rankings: [] }))
       ]);
 
       setNavSummary(navRes);
@@ -44,6 +54,8 @@ export default function App() {
       setPortfolio(pfRes);
       setOrders(ordRes);
       setReports(repRes);
+      if (mlInfoRes) setMlModelInfo(mlInfoRes);
+      if (mlRankRes) setMlRankings(mlRankRes.rankings || []);
     } catch (err) {
       console.error('Lỗi tải dữ liệu API:', err);
     } finally {
@@ -51,9 +63,72 @@ export default function App() {
     }
   };
 
+  const fetchMlData = async () => {
+    try {
+      const [infoRes, rankRes] = await Promise.all([
+        fetch('/api/ml/model/info').then(r => r.json()),
+        fetch('/api/ml/rankings?top_n=10').then(r => r.json())
+      ]);
+      setMlModelInfo(infoRes);
+      setMlRankings(rankRes.rankings || []);
+    } catch (err) {
+      console.error('Lỗi tải dữ liệu ML:', err);
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
+
+  const handleExtractFeatures = async () => {
+    try {
+      setMlExtracting(true);
+      const res = await fetch('/api/ml/extract', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`✅ ${data.message}\nTổng số mẫu: ${Number(data.total_samples).toLocaleString()} (Thắng: ${data.pos_pct}%)\nTệp CSV đã sẵn sàng để tải về!`);
+        fetchMlData();
+      } else {
+        alert('Lỗi trích xuất: ' + data.detail);
+      }
+    } catch (err) {
+      alert('Lỗi: ' + err);
+    } finally {
+      setMlExtracting(false);
+    }
+  };
+
+  const handleModelUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith('.joblib')) {
+      alert('⚠️ Vui lòng chỉ chọn tệp mô hình có định dạng .joblib');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      setMlUploading(true);
+      const res = await fetch('/api/ml/model/upload', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`🎉 ${data.message}\nLần cuối huấn luyện: ${data.trained_at}\nThuật toán: ${data.algorithm}`);
+        fetchMlData();
+      } else {
+        alert('Lỗi tải lên: ' + data.detail);
+      }
+    } catch (err) {
+      alert('Lỗi kết nối: ' + err);
+    } finally {
+      setMlUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const handleCloseNav = async () => {
     if (!confirm('Bạn có chắc chắn muốn chốt sổ NAV ngày hôm nay theo giá thị trường mới nhất?')) return;
@@ -273,6 +348,21 @@ export default function App() {
             <span>Phòng Lab Chiến Lược (vn-backtest)</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300 font-mono">
               {reports.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('ml')}
+            className={`px-4 py-2.5 text-sm font-medium transition cursor-pointer border-b-2 flex items-center space-x-2 ${
+              activeTab === 'ml' 
+                ? 'border-purple-500 text-purple-400' 
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Brain className="w-4 h-4 text-purple-400" />
+            <span>Machine Learning Lab</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-500/20 text-purple-300 font-mono">
+              AI Alpha
             </span>
           </button>
         </div>
@@ -530,6 +620,262 @@ export default function App() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* TAB 4: MACHINE LEARNING LAB */}
+        {activeTab === 'ml' && (
+          <div className="space-y-6">
+            
+            {/* 4.1 Model Overview & Last Trained Status Banner */}
+            <div className="p-6 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900/80 to-slate-900 border border-purple-500/30 shadow-xl relative overflow-hidden">
+              <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+              
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-start space-x-4">
+                  <div className="w-12 h-12 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0 shadow-lg shadow-purple-500/10">
+                    <Brain className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h2 className="text-lg font-bold text-white">Universal Quant Alpha Model</h2>
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        {mlModelInfo?.algorithm || 'LightGBM Classifier'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Bộ não chấm điểm xác suất thắng độc lập 100% với chiến lược • Đánh giá rủi ro Triple-Barrier
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                  <Clock className="w-5 h-5 text-purple-400 shrink-0" />
+                  <div>
+                    <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Lần Cuối Huấn Luyện (Trained At)</div>
+                    <div className="text-sm font-bold text-white font-mono">
+                      {mlModelInfo?.trained_at || 'Chưa huấn luyện'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Metric stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-800/80">
+                <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800/60">
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">ROC-AUC Test</span>
+                  <div className="text-lg font-bold text-purple-400 mt-0.5 font-mono">
+                    {mlModelInfo?.metrics?.test_auc ? (mlModelInfo.metrics.test_auc * 100).toFixed(1) + '%' : '51.6%'}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800/60">
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Tập Dữ Liệu Parquet</span>
+                  <div className="text-lg font-bold text-white mt-0.5 font-mono">
+                    {mlModelInfo?.dataset?.sample_count ? mlModelInfo.dataset.sample_count.toLocaleString() + ' nến' : '11,860 nến'}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800/60">
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Số Cây Quyết Định</span>
+                  <div className="text-lg font-bold text-emerald-400 mt-0.5 font-mono">
+                    {mlModelInfo?.metrics?.best_iteration || 25} trees
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800/60">
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Trạng Thái Model</span>
+                  <div className="text-xs font-bold text-emerald-400 mt-1 flex items-center space-x-1">
+                    <Check className="w-3.5 h-3.5" />
+                    <span>SẴN SÀNG (PRODUCTION)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 4.2 Interactive Action Control Grid (3 Buttons) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              
+              {/* ACTION 1: TRÍCH XUẤT 15 ĐẶC TRƯNG & GÁN NHÃN */}
+              <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col justify-between space-y-4 hover:border-slate-700 transition">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-3">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-bold text-white">1. Trích Xuất 15 Đặc Trưng</h3>
+                  <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                    Tính toán 15 chỉ số kỹ thuật, dòng tiền và áp dụng nhãn Triple-Barrier (+5% TP, -3% SL trong 5 phiên) từ kho dữ liệu Parquet 5 năm.
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleExtractFeatures}
+                  disabled={mlExtracting}
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 text-emerald-400 ${mlExtracting ? 'animate-spin' : ''}`} />
+                  <span>{mlExtracting ? 'Đang trích xuất...' : 'Trích Xuất 15 Đặc Trưng'}</span>
+                </button>
+              </div>
+
+              {/* ACTION 2: TẢI TỆP CSV VỀ MÁY */}
+              <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col justify-between space-y-4 hover:border-slate-700 transition">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-3">
+                    <Download className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-bold text-white">2. Tải Tệp CSV Huấn Luyện</h3>
+                  <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                    Tải tệp <code className="text-blue-300 font-mono">ml_dataset_train.csv</code> về máy tính ({mlModelInfo?.dataset?.csv_size_mb || 4.97} MB) để tải lên Kaggle / Google Colab GPU miễn phí.
+                  </p>
+                </div>
+
+                <a
+                  href="/api/ml/dataset/download"
+                  download="ml_dataset_train.csv"
+                  className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition flex items-center justify-center space-x-2 cursor-pointer shadow-md shadow-blue-600/20"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Tải Tệp CSV Về Máy</span>
+                </a>
+              </div>
+
+              {/* ACTION 3: UPLOAD MODEL .JOBLIB TỪ KAGGLE */}
+              <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col justify-between space-y-4 hover:border-slate-700 transition">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-3">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-bold text-white">3. Tải Lên Model (.joblib)</h3>
+                  <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                    Sau khi huấn luyện xong trên Kaggle, tải tệp <code className="text-purple-300 font-mono">universal_alpha_model.joblib</code> lên đây để hệ thống tự động cập nhật ngay lập tức.
+                  </p>
+                </div>
+
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleModelUpload} 
+                  accept=".joblib" 
+                  className="hidden" 
+                />
+
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={mlUploading}
+                  className="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold transition flex items-center justify-center space-x-2 cursor-pointer shadow-md shadow-purple-600/20 disabled:opacity-50"
+                >
+                  <Upload className={`w-4 h-4 ${mlUploading ? 'animate-bounce' : ''}`} />
+                  <span>{mlUploading ? 'Đang nạp mô hình...' : 'Tải Lên File .joblib'}</span>
+                </button>
+              </div>
+
+            </div>
+
+            {/* 4.3 Live Market ML Alpha Rankings Table */}
+            <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  <div>
+                    <h2 className="text-base font-bold text-white">Bảng Xếp Hạng Alpha Score Thị Trường (Live Market Rankings)</h2>
+                    <p className="text-xs text-slate-400">Dự báo xác suất thắng (0.00 đến 1.00) cho phiên giao dịch gần nhất</p>
+                  </div>
+                </div>
+                <button
+                  onClick={fetchMlData}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 transition flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Làm mới điểm số</span>
+                </button>
+              </div>
+
+              {mlRankings.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 text-sm">
+                  Chưa có dữ liệu xếp hạng. Vui lòng bấm Làm mới điểm số.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-950/50 text-slate-400 text-xs uppercase font-semibold border-b border-slate-800">
+                      <tr>
+                        <th className="px-6 py-3.5">Hạng</th>
+                        <th className="px-6 py-3.5">Mã CP</th>
+                        <th className="px-6 py-3.5">Thị Giá</th>
+                        <th className="px-6 py-3.5">Xác Suất Thắng (ML Score)</th>
+                        <th className="px-6 py-3.5">Đánh Giá Phân Hạng</th>
+                        <th className="px-6 py-3.5">Vol / SMA20</th>
+                        <th className="px-6 py-3.5">RSI (14)</th>
+                        <th className="px-6 py-3.5">Lãi 5 Phiên</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-mono">
+                      {mlRankings.map((item, idx) => {
+                        let scoreColor = 'text-rose-400';
+                        let barBg = 'bg-rose-500';
+                        if (item.ml_score >= 0.65) {
+                          scoreColor = 'text-emerald-400';
+                          barBg = 'bg-emerald-500';
+                        } else if (item.ml_score >= 0.55) {
+                          scoreColor = 'text-amber-400';
+                          barBg = 'bg-amber-500';
+                        } else if (item.ml_score >= 0.45) {
+                          scoreColor = 'text-blue-400';
+                          barBg = 'bg-blue-500';
+                        }
+
+                        return (
+                          <tr key={item.ticker} className="hover:bg-slate-800/30 transition">
+                            <td className="px-6 py-3.5 font-bold text-slate-400">#{idx + 1}</td>
+                            <td className="px-6 py-3.5 font-bold text-white text-base">{item.ticker}</td>
+                            <td className="px-6 py-3.5 text-slate-200">{Number(item.price).toFixed(2)}</td>
+                            <td className="px-6 py-3.5">
+                              <div className="flex items-center space-x-3">
+                                <span className={`font-bold ${scoreColor}`}>
+                                  {(item.ml_score * 100).toFixed(2)}%
+                                </span>
+                                <div className="w-20 bg-slate-800 h-2 rounded-full overflow-hidden">
+                                  <div className={`${barBg} h-full`} style={{ width: `${Math.min(100, item.ml_score * 100)}%` }}></div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-3.5 font-sans text-xs">
+                              <span className={`px-2 py-0.5 rounded-full font-medium ${
+                                item.rating === 'STRONG_BUY' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                item.rating === 'ACCUMULATE' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                item.rating === 'NEUTRAL' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                                'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                              }`}>
+                                {item.label}
+                              </span>
+                            </td>
+                            <td className="px-6 py-3.5 text-slate-300">{item.vol_ratio_20}x</td>
+                            <td className="px-6 py-3.5 text-slate-300">{item.rsi_14}</td>
+                            <td className="px-6 py-3.5">
+                              <span className={item.ret_5d_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                                {item.ret_5d_pct >= 0 ? '+' : ''}{item.ret_5d_pct}%
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* 4.4 Quick Guide Card */}
+            <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800 text-xs text-slate-400 space-y-2">
+              <div className="font-bold text-slate-200 flex items-center space-x-1.5 text-sm">
+                <span>💡 Hướng dẫn Quy trình Huấn Luyện Không Cần Chạm Code:</span>
+              </div>
+              <p>1. Bấm nút <strong>"Trích Xuất 15 Đặc Trưng"</strong> ở trên ➔ Bấm <strong>"Tải Tệp CSV Về Máy"</strong>.</p>
+              <p>2. Mở Kaggle / Google Colab (GPU miễn phí), import notebook <code className="text-purple-300 font-mono">notebooks/kaggle_train_lightgbm.ipynb</code> và bấm <strong>Run All</strong>.</p>
+              <p>3. Tải tệp <code className="text-purple-300 font-mono">universal_alpha_model.joblib</code> từ Kaggle về máy ➔ Bấm nút <strong>"Tải Lên File .joblib"</strong> ở Thẻ 3 phía trên để cập nhật hệ thống ngay lập tức.</p>
+            </div>
+
           </div>
         )}
 

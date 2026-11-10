@@ -170,12 +170,18 @@ def main():
     parser.add_argument("--status", action="store_true", help="Xem báo cáo tổng quan tình trạng Quỹ")
     parser.add_argument("--workflow", choices=["morning", "debate", "eod"], help="Kích hoạt một quy trình làm việc SOP")
     parser.add_argument("--ticker", default="HPG", help="Mã cổ phiếu dùng cho workflow debate (mặc định HPG)")
+    parser.add_argument("--optimize", nargs="?", const="vsa-momentum", help="Kích hoạt Động cơ Tự học & Tiến hóa chiến lược (ví dụ: --optimize vsa-momentum)")
     parser.add_argument("--serve-dashboard", action="store_true", help="Khởi chạy Web Dashboard server (cổng 8000)")
     
     args = parser.parse_args()
 
     if args.status:
         show_status()
+    elif args.optimize:
+        from tools.strategy_optimizer import StrategyOptimizerEngine
+        print_banner()
+        engine = StrategyOptimizerEngine()
+        engine.auto_heal_vsa_strategy(ticker=args.ticker)
     elif args.workflow == "morning":
         run_workflow_morning()
     elif args.workflow == "debate":

@@ -15,6 +15,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./database:/app/database
+      - ./models:/app/models
       - ./.agent:/app/.agent
       - ./dashboard/reports:/app/dashboard/reports
       - ./config:/app/config
@@ -32,7 +33,9 @@ services:
     env_file:
       - .env
     volumes:
+      - ./data:/app/data
       - ./database:/app/database
+      - ./models:/app/models
       - ./.agent:/app/.agent
       - ./config:/app/config
     command: python interfaces/telegram_bot.py
@@ -51,6 +54,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./database:/app/database
+      - ./models:/app/models
       - ./.agent:/app/.agent
       - ./dashboard/reports:/app/dashboard/reports
       - ./config:/app/config

@@ -14,7 +14,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -60,6 +61,10 @@ class FillOrderRequest(BaseModel):
 class CloseNavRequest(BaseModel):
     trade_date: Optional[str] = None
     notes: Optional[str] = "Chốt sổ thủ công từ Dashboard"
+
+class OptimizeStrategyRequest(BaseModel):
+    strategy_id: str = "vsa-momentum"
+    ticker: str = "HPG"
 
 # ==========================================
 # API ENDPOINTS
@@ -161,6 +166,155 @@ def trigger_close_nav(req: CloseNavRequest):
         notes=req.notes
     )
     return {"status": "SUCCESS", "nav_report": res}
+
+@app.post("/api/strategies/optimize")
+def trigger_optimize_strategy(req: OptimizeStrategyRequest):
+    """Kích hoạt Động cơ Tự học hỏi & Tiến hóa tối ưu hóa chiến lược"""
+    try:
+        from tools.strategy_optimizer import StrategyOptimizerEngine
+        engine = StrategyOptimizerEngine()
+        res = engine.auto_heal_vsa_strategy(ticker=req.ticker)
+        return {"status": "SUCCESS", "result": res}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ml/rankings")
+def get_ml_market_rankings(top_n: int = 10):
+    """Lấy Bảng xếp hạng Điểm số Alpha (ML Score) toàn thị trường"""
+    try:
+        from tools.ml_predictor import UniversalAlphaPredictor
+        predictor = UniversalAlphaPredictor()
+        rankings = predictor.get_market_rankings(top_n=top_n)
+        return {
+            "status": "SUCCESS",
+            "model_algorithm": getattr(predictor, "algorithm", "LightGBM"),
+            "trained_at": predictor.trained_at,
+            "rankings": rankings
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ml/score/{ticker}")
+def get_ml_ticker_score(ticker: str):
+    """Chấm điểm ML Score chi tiết cho một mã cổ phiếu"""
+    try:
+        from tools.ml_predictor import UniversalAlphaPredictor
+        predictor = UniversalAlphaPredictor()
+        score = predictor.predict_score(ticker)
+        features = predictor._extract_live_features_for_ticker(ticker.upper()) or {}
+        return {
+            "ticker": ticker.upper(),
+            "ml_score": score,
+            "features": features
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ml/model/info")
+def get_ml_model_info():
+    """Lấy thông tin siêu dữ liệu của Model ML hiện tại & trạng thái file dataset"""
+    try:
+        from tools.ml_predictor import UniversalAlphaPredictor
+        predictor = UniversalAlphaPredictor()
+        
+        csv_file = settings.BASE_DIR / "data" / "ml_dataset_train.csv"
+        csv_exists = csv_file.exists()
+        csv_size_mb = round(csv_file.stat().st_size / (1024 * 1024), 2) if csv_exists else 0.0
+        
+        parquet_file = settings.BASE_DIR / "data" / "ml_dataset_train.parquet"
+        parquet_exists = parquet_file.exists()
+        
+        sample_count = 0
+        if parquet_exists:
+            import polars as pl
+            try:
+                sample_count = len(pl.read_parquet(parquet_file))
+            except Exception:
+                pass
+        
+        return {
+            "status": "SUCCESS",
+            "algorithm": getattr(predictor, "algorithm", "LightGBM Classifier"),
+            "trained_at": predictor.trained_at,
+            "metrics": predictor.metrics,
+            "model_path": "models/universal_alpha_model.joblib",
+            "dataset": {
+                "csv_exists": csv_exists,
+                "csv_size_mb": csv_size_mb,
+                "parquet_exists": parquet_exists,
+                "sample_count": sample_count
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/ml/extract")
+def trigger_ml_feature_extraction():
+    """Kích hoạt Trích xuất 15 Đặc trưng Kỹ thuật & Gán nhãn Triple-Barrier từ Parquet"""
+    try:
+        from tools.ml_feature_extractor import MLFeatureExtractor
+        extractor = MLFeatureExtractor()
+        output_parquet = settings.BASE_DIR / "data" / "ml_dataset_train.parquet"
+        extractor.export_dataset(output_parquet, export_csv=True)
+        
+        import polars as pl
+        df = pl.read_parquet(output_parquet)
+        total_samples = len(df)
+        pos_count = int(df.filter(pl.col("target") == 1).shape[0])
+        neg_count = int(df.filter(pl.col("target") == 0).shape[0])
+        
+        return {
+            "status": "SUCCESS",
+            "message": f"Đã trích xuất thành công {total_samples:,} mẫu nến huấn luyện!",
+            "total_samples": total_samples,
+            "pos_count": pos_count,
+            "neg_count": neg_count,
+            "pos_pct": round((pos_count / max(total_samples, 1)) * 100.0, 2),
+            "csv_ready": True
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ml/dataset/download")
+def download_ml_dataset_csv():
+    """Tải trực tiếp tệp ml_dataset_train.csv về máy tính để upload lên Kaggle"""
+    csv_file = settings.BASE_DIR / "data" / "ml_dataset_train.csv"
+    if not csv_file.exists():
+        raise HTTPException(status_code=404, detail="Chưa có tệp ml_dataset_train.csv. Vui lòng bấm Trích xuất đặc trưng trước.")
+    return FileResponse(
+        path=str(csv_file),
+        filename="ml_dataset_train.csv",
+        media_type="text/csv"
+    )
+
+@app.post("/api/ml/model/upload")
+async def upload_ml_model_file(file: UploadFile = File(...)):
+    """Tải lên tệp model (.joblib) đã huấn luyện trên Kaggle/Colab vào hệ thống"""
+    if not file.filename.endswith(".joblib"):
+        raise HTTPException(status_code=400, detail="Chỉ chấp nhận tệp có định dạng .joblib!")
+    
+    target_path = settings.BASE_DIR / "models" / "universal_alpha_model.joblib"
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    contents = await file.read()
+    if len(contents) < 500:
+        raise HTTPException(status_code=400, detail="Tệp tải lên không hợp lệ hoặc quá nhỏ!")
+        
+    with open(target_path, "wb") as f:
+        f.write(contents)
+        
+    # Buộc nạp lại model vào RAM
+    from tools.ml_predictor import UniversalAlphaPredictor
+    predictor = UniversalAlphaPredictor()
+    predictor.reload_model()
+    
+    return {
+        "status": "SUCCESS",
+        "message": f"Đã cập nhật mô hình {file.filename} thành công!",
+        "trained_at": predictor.trained_at,
+        "algorithm": getattr(predictor, "algorithm", "LightGBM Classifier"),
+        "metrics": predictor.metrics
+    }
 
 # Mount thư mục build của React frontend (nếu đã build) để phục vụ Dashboard trực tiếp tại root URL
 dist_dir = settings.BASE_DIR / "dashboard" / "frontend" / "dist"

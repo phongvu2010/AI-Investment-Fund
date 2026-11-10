@@ -29,6 +29,7 @@ pyarrow>=17.0.0
 polars>=1.15.0
 duckdb>=1.1.0
 numpy>=1.26.0
+pandas>=2.2.0
 
 # 3. Động cơ Kiểm định Thị trường Việt Nam (Hunter Do)
 vn-backtest[optimize]>=0.1.4
@@ -41,3 +42,12 @@ python-dotenv>=1.0.0
 fastapi>=0.115.0
 httpx2>=2.0.0
 uvicorn>=0.30.0
+python-multipart>=0.0.9
+
+# 6. Machine Learning & AI Alpha Pipeline
+scikit-learn>=1.4.0
+lightgbm>=4.0.0
+joblib>=1.3.0
+
+# 7. Testing & CI/CD
+pytest>=8.0.0
