@@ -1,0 +1,137 @@
+# ====================================================================
+# GITIGNORE CHO DỰ ÁN AI INVESTMENT FUND
+# Chuẩn mực cho: Python + Node.js (Vite/React) + SQLite + Parquet + Bảo mật
+# ====================================================================
+
+# --------------------------------------------------------------------
+# 1. BẢO MẬT & KHÓA BÍ MẬT (SECRETS & CREDENTIALS - TUYỆT ĐỐI KHÔNG COMMIT)
+# --------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.cert
+
+# Khóa dịch vụ Google Cloud / BigQuery
+*service_account*.json
+*credentials*.json
+*gcp*.json
+credentials/
+
+# --------------------------------------------------------------------
+# 2. CƠ SỞ DỮ LIỆU & FILE DỮ LIỆU ĐỊNH LƯỢNG LỚN (DATABASE & DATA LAKES)
+# --------------------------------------------------------------------
+# CSDL SQLite lưu trữ số dư tài khoản thực tế & sổ lệnh
+*.db
+*.sqlite
+*.sqlite3
+database/*.db
+
+# Dữ liệu nến giá Parquet & DuckDB (Tải từ BigQuery hoặc sinh cục bộ)
+*.parquet
+data/*.parquet
+data/*.csv
+*.duckdb
+data/*.duckdb
+
+# --------------------------------------------------------------------
+# 3. MÔI TRƯỜNG PYTHON & CACHE (PYTHON RUNTIME)
+# --------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Môi trường ảo (Virtual Environments)
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Phân phối & Đóng gói (Build & Package)
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Kiểm thử & Phân tích chất lượng (Pytest & Coverage)
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# --------------------------------------------------------------------
+# 4. NODE.JS / VITE / REACT FRONTEND (DASHBOARD)
+# --------------------------------------------------------------------
+# Thư viện phụ thuộc Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+
+# Bản build của React Frontend (tạo ra khi chạy npm run build)
+dashboard/frontend/dist/
+dist-ssr/
+
+# Local cache của Vite
+dashboard/frontend/.vite/
+.eslintcache
+
+# --------------------------------------------------------------------
+# 5. BÁO CÁO HTML SINH TỰ ĐỘNG (INTERACTIVE REPORTS CACHE)
+# --------------------------------------------------------------------
+# Biểu đồ Plotly HTML nặng sinh ra trong quá trình backtest
+dashboard/reports/*.html
+!dashboard/reports/.gitkeep
+
+# --------------------------------------------------------------------
+# 6. RÁC HỆ ĐIỀU HÀNH & TRÌNH SOẠN THẢO (OS & IDE JUNK)
+# --------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Icon
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+
+# IDEs (VS Code, Cursor, JetBrains)
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
