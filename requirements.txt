@@ -30,5 +30,8 @@ polars>=1.15.0
 duckdb>=1.1.0
 numpy>=1.26.0
 
-# 3. Kênh Giao tiếp Telegram & Tiện ích
+# 3. Động cơ Kiểm định Thị trường Việt Nam (Hunter Do)
+vn-backtest[optimize]>=0.1.4
+
+# 4. Kênh Giao tiếp Telegram & Tiện ích
 python-dotenv>=1.0.0
