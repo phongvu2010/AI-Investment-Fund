@@ -105,15 +105,26 @@ def run_phase3_tests():
         print(f"   • Tên: {reports_data[0]['title']} | Trạng thái: {reports_data[0]['cro_status']}")
 
     # 3.6 Submit Fill Order via API (Nhập lệnh từ Web Dashboard)
+    test_fill_ticker = "TEST_TCB"
+    cash_before = db.get_current_cash()
     res = client.post("/api/orders/fill", json={
-        "ticker": "TCB",
+        "ticker": test_fill_ticker,
         "action": "BUY",
         "price": 24.5,
         "volume": 2000,
         "notes": "Kiểm thử nhập từ Dashboard"
     })
     assert res.status_code == 200
-    print(f"✅ /api/orders/fill: Ghi nhận thành công lệnh {res.json()['order_id']}")
+    fill_order_id = res.json()['order_id']
+    print(f"✅ /api/orders/fill: Ghi nhận thành công lệnh {fill_order_id}")
+
+    # Dọn dẹp bản ghi kiểm thử để không làm biến động sổ kế toán thật
+    with db.get_connection() as conn:
+        conn.execute("DELETE FROM order_history WHERE order_id = ?;", (fill_order_id,))
+        conn.execute("DELETE FROM transactions WHERE symbol = ?;", (test_fill_ticker,))
+        conn.execute("DELETE FROM portfolio WHERE ticker = ?;", (test_fill_ticker,))
+        conn.execute("UPDATE account_cash_balance SET cash_balance = ? WHERE account_id = '0001716319';", (cash_before,))
+        conn.commit()
 
     # ----------------------------------------------------
     # BƯỚC 4: KIỂM TRA FRONTEND SERVING (REACT + VITE + TAILWIND)

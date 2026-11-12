@@ -39,6 +39,9 @@ def test_ml_feature_extractor():
 
 def test_ml_trainer_and_package():
     print("\n[TEST 2] Kiểm tra Huấn Luyện & Đóng Gói Model LightGBM...")
+    csv_file = Path("data/ml_dataset_train.csv")
+    if not csv_file.exists():
+        MLFeatureExtractor().export_dataset(Path("data/ml_dataset_train.parquet"), export_csv=True)
     model_file = train_and_export_local_model()
     assert model_file.exists()
     assert model_file.stat().st_size > 1000  # Ít nhất 1KB

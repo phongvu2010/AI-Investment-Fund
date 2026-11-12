@@ -27,12 +27,12 @@ def run_tests():
     # ----------------------------------------------------
     # BƯỚC 1: KHỞI TẠO VÀ KIỂM TRA DATABASE SQLITE
     # ----------------------------------------------------
-    print("\n[TEST 1] Khởi tạo Cơ sở Dữ liệu SQLite...")
-    # Xóa file db cũ nếu có để kiểm tra tạo mới sạch sẽ
-    if settings.SQLITE_DB_PATH.exists():
-        settings.SQLITE_DB_PATH.unlink()
+    print("\n[TEST 1] Khởi tạo Cơ sở Dữ liệu SQLite Kiểm thử...")
+    test_db_path = settings.DATABASE_DIR / "test_fund_vault.db"
+    if test_db_path.exists():
+        test_db_path.unlink()
 
-    db = DatabaseManager()
+    db = DatabaseManager(db_path=test_db_path)
     cash = db.get_current_cash()
     print(f"✅ Khởi tạo thành công! Số dư tiền mặt ban đầu: {cash:,.0f} VND")
     assert cash == settings.INITIAL_CAPITAL, f"Lỗi tiền mặt ban đầu: {cash}"

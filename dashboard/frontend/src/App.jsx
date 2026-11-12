@@ -10,10 +10,13 @@ export default function App() {
   const [navSummary, setNavSummary] = useState(null);
   const [navHistory, setNavHistory] = useState([]);
   const [portfolio, setPortfolio] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [selectedAccount, setSelectedAccount] = useState('ALL');
   const [orders, setOrders] = useState([]);
   const [reports, setReports] = useState([]);
   const [activeTab, setActiveTab] = useState('portfolio');
   const [loading, setLoading] = useState(true);
+  const [capitalSummary, setCapitalSummary] = useState(null);
 
   // Machine Learning Lab State
   const [mlModelInfo, setMlModelInfo] = useState(null);
@@ -25,6 +28,7 @@ export default function App() {
   // Modals
   const [showFillModal, setShowFillModal] = useState(false);
   const [selectedReportUrl, setSelectedReportUrl] = useState(null);
+  const [syncingBq, setSyncingBq] = useState(false);
 
   // Form state
   const [fillForm, setFillForm] = useState({
@@ -36,17 +40,20 @@ export default function App() {
     notes: 'Nhập từ Web Dashboard'
   });
 
-  const fetchData = async () => {
+  const fetchData = async (acc = selectedAccount) => {
     try {
       setLoading(true);
-      const [navRes, histRes, pfRes, ordRes, repRes, mlInfoRes, mlRankRes] = await Promise.all([
+      const accParam = acc && acc !== 'ALL' ? `?account=${acc}` : '';
+      const [navRes, histRes, pfRes, ordRes, repRes, mlInfoRes, mlRankRes, accRes, capRes] = await Promise.all([
         fetch('/api/nav/summary').then(r => r.json()),
         fetch('/api/nav/history').then(r => r.json()),
-        fetch('/api/portfolio').then(r => r.json()),
+        fetch('/api/portfolio' + accParam).then(r => r.json()),
         fetch('/api/orders').then(r => r.json()),
         fetch('/api/reports').then(r => r.json()),
         fetch('/api/ml/model/info').then(r => r.json()).catch(() => null),
-        fetch('/api/ml/rankings?top_n=10').then(r => r.json()).catch(() => ({ rankings: [] }))
+        fetch('/api/ml/rankings?top_n=10').then(r => r.json()).catch(() => ({ rankings: [] })),
+        fetch('/api/accounts').then(r => r.json()).catch(() => []),
+        fetch('/api/capital/summary' + accParam).then(r => r.json()).catch(() => null)
       ]);
 
       setNavSummary(navRes);
@@ -54,6 +61,8 @@ export default function App() {
       setPortfolio(pfRes);
       setOrders(ordRes);
       setReports(repRes);
+      setAccounts(accRes || []);
+      setCapitalSummary(capRes);
       if (mlInfoRes) setMlModelInfo(mlInfoRes);
       if (mlRankRes) setMlRankings(mlRankRes.rankings || []);
     } catch (err) {
@@ -146,6 +155,28 @@ export default function App() {
     }
   };
 
+  const handleSyncBigQuery = async () => {
+    if (!confirm('Bạn có muốn đồng bộ giá đóng cửa thực tế mới nhất từ Google BigQuery và cập nhật lại danh mục?')) return;
+    setSyncingBq(true);
+    try {
+      const res = await fetch('/api/nav/sync-bigquery', {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const priceList = Object.entries(data.prices || {}).map(([t, p]) => `${t}: ${(p/1000).toFixed(2)}k`).join(' | ');
+        alert(`✅ Đã đồng bộ giá thực tế từ BigQuery thành công!\nPhiên: ${data.as_of_date}\n${priceList}\nTổng NAV: ${Number(data.nav_report.total_nav).toLocaleString()} VND`);
+        fetchData();
+      } else {
+        alert('❌ Lỗi đồng bộ: ' + (data.detail || 'Không xác định'));
+      }
+    } catch (err) {
+      alert('Lỗi kết nối: ' + err);
+    } finally {
+      setSyncingBq(false);
+    }
+  };
+
   const handleFillSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -174,7 +205,7 @@ export default function App() {
     }
   };
 
-  const formatVND = (val) => Number(val || 0).toLocaleString('vi-VN') + ' đ';
+  const formatVND = (val) => Number(val || 0).toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + ' đ';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
@@ -211,6 +242,16 @@ export default function App() {
           >
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             <span>Chốt Sổ NAV Ngày</span>
+          </button>
+
+          <button 
+            onClick={handleSyncBigQuery}
+            disabled={syncingBq}
+            className="flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 text-sm font-medium border border-indigo-500/30 transition cursor-pointer disabled:opacity-50"
+            title="Đồng bộ giá đóng cửa thực tế mới nhất từ Google BigQuery"
+          >
+            <Database className={`w-4 h-4 text-indigo-400 ${syncingBq ? 'animate-pulse' : ''}`} />
+            <span>{syncingBq ? 'Đang lấy giá...' : 'Đồng Bộ Giá BigQuery'}</span>
           </button>
 
           <button 
@@ -302,8 +343,9 @@ export default function App() {
               <div className={`text-2xl font-bold tracking-tight ${navSummary.cumulative_pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {navSummary.cumulative_pnl >= 0 ? '+' : ''}{formatVND(navSummary.cumulative_pnl)}
               </div>
-              <div className="mt-3 text-xs text-slate-400">
-                Lợi nhuận tạm tính: <strong className="text-white">{formatVND(navSummary.unrealized_pnl)}</strong>
+              <div className="mt-2 text-xs text-slate-400 flex flex-col space-y-0.5">
+                <div>Đã chốt (Realized): <strong className="text-emerald-400">+{formatVND(navSummary.realized_pnl)}</strong></div>
+                <div>Tạm tính (Unrealized): <strong className="text-rose-400">{formatVND(navSummary.unrealized_pnl)}</strong> <span className="text-[10px] text-slate-500">(FLC: -215.8M)</span></div>
               </div>
             </div>
 
@@ -373,17 +415,44 @@ export default function App() {
             
             {/* 1.1 Holdings Table */}
             <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="px-6 py-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h2 className="text-base font-bold text-white">Vị Thế Đang Nắm Giữ (Holdings)</h2>
-                  <p className="text-xs text-slate-400">Danh mục tài sản thực tế theo giá đóng cửa</p>
+                  <p className="text-xs text-slate-400">Danh mục tài sản thực tế theo 4 tài khoản CTCK</p>
                 </div>
-                <span className="text-xs font-mono text-slate-400">{portfolio.length} mã cổ phiếu</span>
+                
+                {/* Account Filter Pills */}
+                <div className="flex items-center space-x-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800 text-xs">
+                  <button
+                    onClick={() => { setSelectedAccount('ALL'); fetchData('ALL'); }}
+                    className={`px-2.5 py-1 rounded-lg transition font-medium ${selectedAccount === 'ALL' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    Tất cả ({portfolio.length})
+                  </button>
+                  <button
+                    onClick={() => { setSelectedAccount('0001716319'); fetchData('0001716319'); }}
+                    className={`px-2.5 py-1 rounded-lg transition font-medium ${selectedAccount === '0001716319' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    0001716319 (Hiện hành)
+                  </button>
+                  <button
+                    onClick={() => { setSelectedAccount('009C105992'); fetchData('009C105992'); }}
+                    className={`px-2.5 py-1 rounded-lg transition font-medium ${selectedAccount === '009C105992' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    009C105992
+                  </button>
+                  <button
+                    onClick={() => { setSelectedAccount('127008'); fetchData('127008'); }}
+                    className={`px-2.5 py-1 rounded-lg transition font-medium ${selectedAccount === '127008' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    127008
+                  </button>
+                </div>
               </div>
 
-              {portfolio.length === 0 ? (
+              {portfolio.filter(p => selectedAccount === 'ALL' || p.account === selectedAccount).length === 0 ? (
                 <div className="p-8 text-center text-slate-500 text-sm">
-                  📭 Danh mục đang giữ 100% Tiền mặt. Chưa có vị thế cổ phiếu nào mở.
+                  📭 Tài khoản này đang giữ 100% Tiền mặt. Chưa có vị thế cổ phiếu nào mở.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -391,6 +460,7 @@ export default function App() {
                     <thead className="bg-slate-950/50 text-slate-400 text-xs uppercase font-semibold border-b border-slate-800">
                       <tr>
                         <th className="px-6 py-3.5">Mã CP</th>
+                        <th className="px-6 py-3.5">Tài khoản</th>
                         <th className="px-6 py-3.5">Khối lượng</th>
                         <th className="px-6 py-3.5">Giá vốn</th>
                         <th className="px-6 py-3.5">Thị giá</th>
@@ -400,14 +470,26 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
-                      {portfolio.map((item) => (
-                        <tr key={item.ticker} className="hover:bg-slate-800/30 transition">
+                      {portfolio
+                        .filter(p => selectedAccount === 'ALL' || p.account === selectedAccount)
+                        .map((item) => (
+                        <tr key={`${item.account}-${item.ticker}`} className="hover:bg-slate-800/30 transition">
                           <td className="px-6 py-4 font-bold text-emerald-400 flex items-center space-x-2">
                             <span>{item.ticker}</span>
+                            {item.ticker === 'FLC' && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                Treo sàn (0 đ)
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-xs px-2 py-0.5 rounded font-mono bg-slate-800/80 text-slate-300 border border-slate-700/60">
+                              {item.account}
+                            </span>
                           </td>
                           <td className="px-6 py-4 font-mono">{Number(item.quantity).toLocaleString()}</td>
-                          <td className="px-6 py-4 font-mono">{Number(item.avg_buy_price).toFixed(2)}</td>
-                          <td className="px-6 py-4 font-mono text-white font-medium">{Number(item.current_price).toFixed(2)}</td>
+                          <td className="px-6 py-4 font-mono">{Number(item.avg_buy_price).toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} đ</td>
+                          <td className="px-6 py-4 font-mono text-white font-medium">{Number(item.current_price).toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} đ</td>
                           <td className="px-6 py-4 font-mono font-medium">{formatVND(item.market_value)}</td>
                           <td className="px-6 py-4">
                             <span className={`font-mono font-semibold ${item.unrealized_pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -541,19 +623,40 @@ export default function App() {
               )}
             </div>
 
-            <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
               <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800/60">
-                <div className="text-xs text-slate-400 uppercase font-semibold">Vốn Khởi Lập</div>
-                <div className="text-lg font-bold text-white mt-1">1,000,000,000 đ</div>
+                <div className="text-xs text-slate-400 uppercase font-semibold">Vốn Gốc Đang Đầu Tư</div>
+                <div className="text-lg font-bold text-white mt-1">{formatVND(capitalSummary?.active_capital || 0)}</div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  Nộp: {formatVND(capitalSummary?.total_deposited)} • Rút: {formatVND(capitalSummary?.total_withdrawn)}
+                  {(capitalSummary?.profit_withdrawn || 0) > 0 && (
+                    <div className="text-emerald-400 font-medium mt-0.5">Lãi đã rút: +{formatVND(capitalSummary?.profit_withdrawn)}</div>
+                  )}
+                </div>
               </div>
               <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800/60">
                 <div className="text-xs text-slate-400 uppercase font-semibold">NAV Hiện Tại</div>
-                <div className="text-lg font-bold text-emerald-400 mt-1">{formatVND(navSummary?.total_nav)}</div>
+                <div className="text-lg font-bold text-emerald-400 mt-1">{formatVND(capitalSummary?.current_nav || navSummary?.total_nav)}</div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  Tiền: {formatVND(capitalSummary?.cash_balance)} • Cổ: {formatVND(capitalSummary?.stock_value)}
+                </div>
               </div>
               <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800/60">
-                <div className="text-xs text-slate-400 uppercase font-semibold">Tỷ Suất Sinh Lời</div>
-                <div className="text-lg font-bold text-emerald-400 mt-1">
-                  +{(((navSummary?.total_nav - 1_000_000_000) / 1_000_000_000) * 100).toFixed(3)}%
+                <div className="text-xs text-slate-400 uppercase font-semibold">Lợi Nhuận Toàn Lịch Sử</div>
+                <div className={`text-lg font-bold mt-1 ${(capitalSummary?.net_profit || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {(capitalSummary?.net_profit || 0) >= 0 ? '+' : ''}{formatVND(capitalSummary?.net_profit || 0)}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  NAV + Lãi đã rút - Vốn gốc đang gửi
+                </div>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800/60">
+                <div className="text-xs text-slate-400 uppercase font-semibold">Tỷ Suất Sinh Lời Thực Tế</div>
+                <div className={`text-lg font-bold mt-1 ${(capitalSummary?.return_pct || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {(capitalSummary?.return_pct || 0) >= 0 ? '+' : ''}{Number(capitalSummary?.return_pct || 0).toFixed(2)}%
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  Tính trên vốn gốc đầu tư thực tế
                 </div>
               </div>
             </div>

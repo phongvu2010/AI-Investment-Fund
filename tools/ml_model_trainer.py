@@ -88,8 +88,7 @@ def train_and_export_local_model(
     model.fit(
         X_train,
         y_train,
-        eval_X=X_test,
-        eval_y=y_test,
+        eval_set=[(X_test, y_test)],
         callbacks=[lgb.early_stopping(stopping_rounds=30, verbose=False)]
     )
 

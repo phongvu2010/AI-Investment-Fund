@@ -95,9 +95,19 @@ def get_nav_history(limit: int = 90):
     return db.get_nav_history(limit=limit)
 
 @app.get("/api/portfolio")
-def get_portfolio():
-    """Lấy danh mục cổ phiếu đang nắm giữ kèm lãi/lỗ và tỷ trọng"""
-    return db.get_portfolio()
+def get_portfolio(account: Optional[str] = None):
+    """Lấy danh mục cổ phiếu đang nắm giữ kèm lãi/lỗ và tỷ trọng (toàn quỹ hoặc theo tài khoản)"""
+    return db.get_portfolio(account=account)
+
+@app.get("/api/accounts")
+def get_broker_accounts():
+    """Lấy danh sách các tài khoản CTCK và số dư tiền mặt thực tế"""
+    return db.get_broker_accounts()
+
+@app.get("/api/transactions")
+def get_recent_transactions(account: Optional[str] = None, limit: int = 100):
+    """Lấy danh sách giao dịch thực tế trong sổ kế toán quỹ"""
+    return db.get_recent_transactions(account=account, limit=limit)
 
 @app.get("/api/orders")
 def get_orders(limit: int = 50):
@@ -166,6 +176,75 @@ def trigger_close_nav(req: CloseNavRequest):
         notes=req.notes
     )
     return {"status": "SUCCESS", "nav_report": res}
+
+@app.get("/api/capital/summary")
+def get_capital_summary(account: Optional[str] = None):
+    """Lấy số liệu vốn nộp, rút và vốn nạp ròng thực tế (toàn quỹ hoặc theo tài khoản)"""
+    return db.get_capital_summary(account=account)
+
+@app.post("/api/nav/sync-bigquery")
+def sync_prices_from_bigquery():
+    """Đồng bộ giá đóng cửa thực tế mới nhất từ BigQuery và Mark-to-Market toàn bộ danh mục"""
+    try:
+        from tools.bigquery_sync import BigQuerySyncEngine
+        engine = BigQuerySyncEngine()
+        client = engine._get_client()
+        if client is None:
+            raise HTTPException(status_code=500, detail="Không thể kết nối BigQuery. Vui lòng kiểm tra GCP credentials.")
+        
+        portfolio = db.get_portfolio()
+        tickers = list(set([p["ticker"] for p in portfolio if p["quantity"] > 0]))
+        if not tickers:
+            return {"status": "SUCCESS", "message": "Danh mục trống", "prices": {}}
+
+        tickers_str = ", ".join([f"'{t}'" for t in tickers])
+        query = f"""
+            WITH ranked_dates AS (
+                SELECT DISTINCT trading_date
+                FROM `{settings.GCP_PROJECT_ID}.{settings.BIGQUERY_DATASET}.{settings.BIGQUERY_TABLE_RAW}`
+                ORDER BY trading_date DESC
+                LIMIT 2
+            ),
+            ranked_prices AS (
+                SELECT 
+                    symbol, 
+                    CAST(trading_date AS STRING) as trade_date, 
+                    close_price
+                FROM `{settings.GCP_PROJECT_ID}.{settings.BIGQUERY_DATASET}.{settings.BIGQUERY_TABLE_RAW}`
+                WHERE symbol IN ({tickers_str})
+                  AND trading_date IN (SELECT trading_date FROM ranked_dates)
+            )
+            SELECT symbol, trade_date, close_price 
+            FROM ranked_prices
+            ORDER BY trade_date ASC
+        """
+        rows = list(client.query(query).result())
+        from collections import defaultdict
+        daily_prices = defaultdict(dict)
+        for r in rows:
+            sym = r["symbol"]
+            p = float(r["close_price"])
+            t_date = r["trade_date"]
+            daily_prices[t_date][sym] = p
+
+        res = None
+        latest_date = None
+        for t_date in sorted(daily_prices.keys()):
+            res = db.close_daily_nav(
+                trade_date=t_date,
+                current_prices=daily_prices[t_date],
+                notes=f"Đồng bộ giá thực tế BigQuery ({t_date})"
+            )
+            latest_date = t_date
+
+        return {
+            "status": "SUCCESS",
+            "as_of_date": latest_date,
+            "prices": daily_prices.get(latest_date, {}),
+            "nav_report": res
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/strategies/optimize")
 def trigger_optimize_strategy(req: OptimizeStrategyRequest):
