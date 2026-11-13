@@ -4,6 +4,7 @@ Thực thi các nghiệp vụ Kế toán Quỹ Đa Tài khoản, Sổ lệnh, Da
 """
 
 import sqlite3
+import json
 from datetime import datetime, date
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
@@ -12,10 +13,11 @@ from config import settings
 class DatabaseManager:
     """Quản trị viên Cơ sở Dữ liệu SQLite fund_vault.db"""
 
-    def __init__(self, db_path: Optional[Path] = None):
-        self.db_path = db_path or settings.SQLITE_DB_PATH
+    def __init__(self, db_path: Optional[Any] = None):
+        self.db_path = Path(db_path) if db_path else settings.SQLITE_DB_PATH
         self.schema_path = settings.DATABASE_DIR / "schema.sql"
         self._ensure_db()
+        self.migrate_schema()
 
     def get_connection(self) -> sqlite3.Connection:
         """Tạo kết nối SQLite có hỗ trợ row dictionary và bật foreign keys"""
@@ -28,6 +30,84 @@ class DatabaseManager:
         """Khởi tạo cấu trúc bảng từ schema.sql nếu database chưa tồn tại"""
         if not self.db_path.exists() or self.db_path.stat().st_size == 0:
             self.init_db()
+
+    def migrate_schema(self):
+        """Tự động kiểm tra và nâng cấp schema an toàn (ALTER TABLE) nếu các cột mới chưa tồn tại"""
+        with self.get_connection() as conn:
+            # 1. Bảng portfolio: kiểm tra cột strategy_book
+            cursor = conn.execute("PRAGMA table_info(portfolio);")
+            pf_cols = [r["name"] for r in cursor.fetchall()]
+            if "strategy_book" not in pf_cols and len(pf_cols) > 0:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS portfolio_migrated (
+                        account TEXT NOT NULL,
+                        ticker TEXT NOT NULL,
+                        strategy_book TEXT NOT NULL DEFAULT 'QUANT' CHECK(strategy_book IN ('CORE', 'QUANT')),
+                        quantity REAL NOT NULL CHECK (quantity >= 0),
+                        avg_buy_price REAL NOT NULL,
+                        current_price REAL DEFAULT 0.0,
+                        market_value REAL DEFAULT 0.0,
+                        unrealized_pnl REAL DEFAULT 0.0,
+                        unrealized_pnl_pct REAL DEFAULT 0.0,
+                        weight_pct REAL DEFAULT 0.0,
+                        first_bought_date TEXT,
+                        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (account, ticker, strategy_book)
+                    );
+                """)
+                conn.execute("""
+                    INSERT INTO portfolio_migrated (
+                        account, ticker, strategy_book, quantity, avg_buy_price, current_price,
+                        market_value, unrealized_pnl, unrealized_pnl_pct, weight_pct, first_bought_date, updated_at
+                    )
+                    SELECT account, ticker, 'QUANT', quantity, avg_buy_price, current_price,
+                           market_value, unrealized_pnl, unrealized_pnl_pct, weight_pct, first_bought_date, updated_at
+                    FROM portfolio;
+                """)
+                conn.execute("DROP TABLE portfolio;")
+                conn.execute("ALTER TABLE portfolio_migrated RENAME TO portfolio;")
+
+            # 2. Bảng order_history: kiểm tra cột strategy_book
+            cursor = conn.execute("PRAGMA table_info(order_history);")
+            ord_cols = [r["name"] for r in cursor.fetchall()]
+            if "strategy_book" not in ord_cols and len(ord_cols) > 0:
+                conn.execute("ALTER TABLE order_history ADD COLUMN strategy_book TEXT NOT NULL DEFAULT 'QUANT';")
+
+            # 3. Bảng nav_daily: kiểm tra cột core_nav, quant_nav
+            cursor = conn.execute("PRAGMA table_info(nav_daily);")
+            nav_cols = [r["name"] for r in cursor.fetchall()]
+            if "core_nav" not in nav_cols and len(nav_cols) > 0:
+                conn.execute("ALTER TABLE nav_daily ADD COLUMN core_nav REAL DEFAULT 0.0;")
+            if "quant_nav" not in nav_cols and len(nav_cols) > 0:
+                conn.execute("ALTER TABLE nav_daily ADD COLUMN quant_nav REAL DEFAULT 0.0;")
+                conn.execute("UPDATE nav_daily SET quant_nav = total_nav, core_nav = 0.0 WHERE quant_nav = 0.0 OR quant_nav IS NULL;")
+
+            # 4. Bảng decision_memos: kiểm tra các cột
+            cursor = conn.execute("PRAGMA table_info(decision_memos);")
+            memo_cols = [r["name"] for r in cursor.fetchall()]
+            if len(memo_cols) > 0:
+                if "strategy_book" not in memo_cols:
+                    conn.execute("ALTER TABLE decision_memos ADD COLUMN strategy_book TEXT NOT NULL DEFAULT 'QUANT';")
+                if "macro_view" not in memo_cols:
+                    conn.execute("ALTER TABLE decision_memos ADD COLUMN macro_view TEXT;")
+                if "fa_summary" not in memo_cols:
+                    conn.execute("ALTER TABLE decision_memos ADD COLUMN fa_summary TEXT;")
+                if "ta_ml_summary" not in memo_cols:
+                    conn.execute("ALTER TABLE decision_memos ADD COLUMN ta_ml_summary TEXT;")
+                if "bull_arguments" not in memo_cols:
+                    conn.execute("ALTER TABLE decision_memos ADD COLUMN bull_arguments TEXT;")
+                if "bear_arguments" not in memo_cols:
+                    conn.execute("ALTER TABLE decision_memos ADD COLUMN bear_arguments TEXT;")
+                if "cro_verdict" not in memo_cols:
+                    conn.execute("ALTER TABLE decision_memos ADD COLUMN cro_verdict TEXT;")
+                if "cro_position_size" not in memo_cols:
+                    conn.execute("ALTER TABLE decision_memos ADD COLUMN cro_position_size REAL DEFAULT 0.0;")
+                if "cio_decision" not in memo_cols:
+                    conn.execute("ALTER TABLE decision_memos ADD COLUMN cio_decision TEXT;")
+                if "status" not in memo_cols:
+                    conn.execute("ALTER TABLE decision_memos ADD COLUMN status TEXT DEFAULT 'PROPOSED';")
+
+            conn.commit()
 
     def init_db(self, initial_capital: float = settings.INITIAL_CAPITAL) -> bool:
         """Khởi tạo database hoàn toàn mới và nạp vốn ban đầu"""
@@ -107,25 +187,29 @@ class DatabaseManager:
                 return float(row_nav["cash_balance"])
             return settings.INITIAL_CAPITAL
 
-    def get_portfolio(self, account: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Lấy danh mục cổ phiếu đang nắm giữ (hỗ trợ lọc theo tài khoản hoặc toàn quỹ)"""
+    def get_portfolio(self, account: Optional[str] = None, strategy_book: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Lấy danh mục cổ phiếu đang nắm giữ (hỗ trợ lọc theo tài khoản và sổ chiến lược CORE/QUANT)"""
         with self.get_connection() as conn:
+            query = """
+                SELECT account, ticker, strategy_book, quantity, avg_buy_price, current_price, market_value,
+                       unrealized_pnl, unrealized_pnl_pct, weight_pct, first_bought_date, updated_at
+                FROM portfolio 
+                WHERE quantity > 0
+            """
+            params = []
             if account and account != "ALL":
-                rows = conn.execute("""
-                    SELECT account, ticker, quantity, avg_buy_price, current_price, market_value,
-                           unrealized_pnl, unrealized_pnl_pct, weight_pct, first_bought_date, updated_at
-                    FROM portfolio 
-                    WHERE quantity > 0 AND account = ?
-                    ORDER BY market_value DESC;
-                """, (account,)).fetchall()
+                query += " AND account = ?"
+                params.append(account)
+            if strategy_book and strategy_book != "ALL":
+                query += " AND strategy_book = ?"
+                params.append(strategy_book.upper())
+
+            if account and account != "ALL":
+                query += " ORDER BY market_value DESC;"
             else:
-                rows = conn.execute("""
-                    SELECT account, ticker, quantity, avg_buy_price, current_price, market_value,
-                           unrealized_pnl, unrealized_pnl_pct, weight_pct, first_bought_date, updated_at
-                    FROM portfolio 
-                    WHERE quantity > 0
-                    ORDER BY (account = '0001716319') DESC, market_value DESC;
-                """).fetchall()
+                query += " ORDER BY (account = '0001716319') DESC, market_value DESC;"
+
+            rows = conn.execute(query, tuple(params)).fetchall()
             return [dict(row) for row in rows]
 
 
@@ -172,21 +256,22 @@ class DatabaseManager:
         memo_id: Optional[str] = None,
         notes: Optional[str] = None,
         trade_date: Optional[str] = None,
-        account: str = "0001716319"
+        account: str = "0001716319",
+        strategy_book: str = "QUANT"
     ) -> str:
         """AI tạo lệnh đề xuất gửi Telegram cho Bạn"""
         norm_proposed_price = proposed_price * 1000.0 if proposed_price < 1000.0 else proposed_price
         t_date = trade_date or date.today().strftime("%Y-%m-%d")
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{ticker}"
+        order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S%f')}-{ticker}"
 
         with self.get_connection() as conn:
             conn.execute("""
                 INSERT INTO order_history (
-                    order_id, account, ticker, action, order_type, proposed_price, proposed_volume,
+                    order_id, account, ticker, strategy_book, action, order_type, proposed_price, proposed_volume,
                     status, trade_date, memo_id, notes, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PROPOSED', ?, ?, ?, ?);
-            """, (order_id, account, ticker.upper(), action.upper(), order_type, norm_proposed_price, proposed_volume, t_date, memo_id, notes, now_str))
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PROPOSED', ?, ?, ?, ?);
+            """, (order_id, account, ticker.upper(), strategy_book.upper(), action.upper(), order_type, norm_proposed_price, proposed_volume, t_date, memo_id, notes, now_str))
             conn.commit()
         return order_id
 
@@ -228,6 +313,7 @@ class DatabaseManager:
             proposed_price = order["proposed_price"]
             proposed_volume = order["proposed_volume"]
             account = order["account"] if "account" in order.keys() and order["account"] else "0001716319"
+            strategy_book = order["strategy_book"] if "strategy_book" in order.keys() and order["strategy_book"] else "QUANT"
 
             # Lấy biểu phí tài khoản
             acc_row = conn.execute("SELECT fee_rate FROM broker_accounts WHERE account_id = ?;", (account,)).fetchone()
@@ -248,7 +334,7 @@ class DatabaseManager:
             """, (norm_executed_price, executed_volume, status, fee, tax, slippage_pct, now_str, notes, order_id))
 
             self._apply_trade_to_portfolio_and_cash(
-                conn, ticker, action, norm_executed_price, executed_volume, fee, tax, order["trade_date"], account=account
+                conn, ticker, action, norm_executed_price, executed_volume, fee, tax, order["trade_date"], account=account, strategy_book=strategy_book
             )
             conn.commit()
 
@@ -256,6 +342,7 @@ class DatabaseManager:
             "order_id": order_id,
             "account": account,
             "ticker": ticker,
+            "strategy_book": strategy_book,
             "action": action,
             "executed_price": norm_executed_price,
             "executed_volume": executed_volume,
@@ -273,13 +360,14 @@ class DatabaseManager:
         executed_volume: int,
         trade_date: Optional[str] = None,
         notes: str = "Nhập bù thủ công qua Telegram",
-        account: str = "0001716319"
+        account: str = "0001716319",
+        strategy_book: str = "QUANT"
     ) -> str:
         """Cơ chế Nhập bù trực tiếp: Nhập bù lệnh khớp từ app CTCK"""
         norm_executed_price = executed_price * 1000.0 if executed_price < 1000.0 else executed_price
         t_date = trade_date or date.today().strftime("%Y-%m-%d")
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        order_id = f"FILL-{datetime.now().strftime('%Y%m%d%H%M%S')}-{ticker.upper()}"
+        order_id = f"FILL-{datetime.now().strftime('%Y%m%d%H%M%S%f')}-{ticker.upper()}"
 
         with self.get_connection() as conn:
             acc_row = conn.execute("SELECT fee_rate FROM broker_accounts WHERE account_id = ?;", (account,)).fetchone()
@@ -291,15 +379,15 @@ class DatabaseManager:
 
             conn.execute("""
                 INSERT INTO order_history (
-                    order_id, account, ticker, action, order_type, proposed_price, proposed_volume,
+                    order_id, account, ticker, strategy_book, action, order_type, proposed_price, proposed_volume,
                     executed_price, executed_volume, status, fee, tax, slippage_pct,
                     trade_date, created_at, executed_at, notes
-                ) VALUES (?, ?, ?, ?, 'LO', ?, ?, ?, ?, 'FILLED', ?, ?, 0.0, ?, ?, ?, ?);
-            """, (order_id, account, ticker.upper(), action.upper(), norm_executed_price, executed_volume,
+                ) VALUES (?, ?, ?, ?, ?, 'LO', ?, ?, ?, ?, 'FILLED', ?, ?, 0.0, ?, ?, ?, ?);
+            """, (order_id, account, ticker.upper(), strategy_book.upper(), action.upper(), norm_executed_price, executed_volume,
                   norm_executed_price, executed_volume, fee, tax, t_date, now_str, now_str, notes))
 
             self._apply_trade_to_portfolio_and_cash(
-                conn, ticker.upper(), action.upper(), norm_executed_price, executed_volume, fee, tax, t_date, account=account
+                conn, ticker.upper(), action.upper(), norm_executed_price, executed_volume, fee, tax, t_date, account=account, strategy_book=strategy_book.upper()
             )
             conn.commit()
 
@@ -315,7 +403,8 @@ class DatabaseManager:
         fee: float,
         tax: float,
         trade_date: str,
-        account: str = "0001716319"
+        account: str = "0001716319",
+        strategy_book: str = "QUANT"
     ):
         """
         Nghiệp vụ hạch toán biến động cổ phiếu và tiền mặt trong cùng 1 transaction:
@@ -326,8 +415,11 @@ class DatabaseManager:
         cash_row = conn.execute("SELECT cash_balance FROM account_cash_balance WHERE account_id = ?;", (account,)).fetchone()
         current_acc_cash = float(cash_row["cash_balance"]) if cash_row else 0.0
 
-        # Lấy vị thế hiện tại của cổ phiếu trong tài khoản này
-        pf_row = conn.execute("SELECT * FROM portfolio WHERE account = ? AND ticker = ?;", (account, ticker)).fetchone()
+        # Lấy vị thế hiện tại của cổ phiếu trong tài khoản này theo đúng Sổ chiến lược
+        pf_row = conn.execute(
+            "SELECT * FROM portfolio WHERE account = ? AND ticker = ? AND strategy_book = ?;", 
+            (account, ticker, strategy_book)
+        ).fetchone()
 
         calc_avg_price = None
         calc_profit = None
@@ -353,8 +445,8 @@ class DatabaseManager:
                     UPDATE portfolio
                     SET quantity = ?, avg_buy_price = ?, current_price = ?, market_value = ?,
                         unrealized_pnl = ?, unrealized_pnl_pct = 0.0, updated_at = CURRENT_TIMESTAMP
-                    WHERE account = ? AND ticker = ?;
-                """, (new_qty, new_avg_price, price, market_val, market_val - (new_qty * new_avg_price), account, ticker))
+                    WHERE account = ? AND ticker = ? AND strategy_book = ?;
+                """, (new_qty, new_avg_price, price, market_val, market_val - (new_qty * new_avg_price), account, ticker, strategy_book))
             else:
                 new_avg_price = ((volume * price) + fee) / volume if volume > 0 else price
                 market_val = volume * price
@@ -362,10 +454,10 @@ class DatabaseManager:
 
                 conn.execute("""
                     INSERT INTO portfolio (
-                        account, ticker, quantity, avg_buy_price, current_price, market_value,
+                        account, ticker, strategy_book, quantity, avg_buy_price, current_price, market_value,
                         unrealized_pnl, unrealized_pnl_pct, first_bought_date, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, CURRENT_TIMESTAMP);
-                """, (account, ticker, volume, new_avg_price, price, market_val, trade_date))
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, CURRENT_TIMESTAMP);
+                """, (account, ticker, strategy_book, volume, new_avg_price, price, market_val, trade_date))
 
         elif action.upper() == "SELL":
             # TIỀN MẶT TĂNG = (Giá * Khối lượng) - (Phí + Thuế)
@@ -384,15 +476,15 @@ class DatabaseManager:
 
                 new_qty = max(0.0, old_qty - volume)
                 if new_qty < 1e-4:
-                    conn.execute("DELETE FROM portfolio WHERE account = ? AND ticker = ?;", (account, ticker))
+                    conn.execute("DELETE FROM portfolio WHERE account = ? AND ticker = ? AND strategy_book = ?;", (account, ticker, strategy_book))
                 else:
                     market_val = new_qty * price
                     conn.execute("""
                         UPDATE portfolio
                         SET quantity = ?, current_price = ?, market_value = ?,
                             unrealized_pnl = ?, updated_at = CURRENT_TIMESTAMP
-                        WHERE account = ? AND ticker = ?;
-                    """, (new_qty, price, market_val, market_val - (new_qty * old_avg_price), account, ticker))
+                        WHERE account = ? AND ticker = ? AND strategy_book = ?;
+                    """, (new_qty, price, market_val, market_val - (new_qty * old_avg_price), account, ticker, strategy_book))
 
         # Cập nhật số dư tiền mặt tài khoản
         conn.execute("""
@@ -409,7 +501,7 @@ class DatabaseManager:
                 amount, total_amount, avg_price, profit, profit_pct, comment
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         """, (trade_date, account, trans_type, ticker, signed_qty, price, fee, tax,
-              price * volume, tot_amount, calc_avg_price, calc_profit, calc_profit_pct, f"Khớp lệnh {action} {ticker}"))
+              price * volume, tot_amount, calc_avg_price, calc_profit, calc_profit_pct, f"[{strategy_book}] Khớp lệnh {action} {ticker}"))
 
     def apply_corporate_action(
         self,
@@ -527,11 +619,14 @@ class DatabaseManager:
             SUSPENDED_TICKERS = {"FLC"}
             total_stock_value = 0.0
             total_unrealized_pnl = 0.0
+            core_stock_value = 0.0
+            quant_stock_value = 0.0
 
-            pf_rows = conn.execute("SELECT account, ticker, quantity, avg_buy_price FROM portfolio WHERE quantity > 0;").fetchall()
+            pf_rows = conn.execute("SELECT account, ticker, strategy_book, quantity, avg_buy_price FROM portfolio WHERE quantity > 0;").fetchall()
             for row in pf_rows:
                 acc = row["account"]
                 t = row["ticker"]
+                s_book = row["strategy_book"] if "strategy_book" in row.keys() else "QUANT"
                 q = float(row["quantity"])
                 avg_p = float(row["avg_buy_price"])
 
@@ -550,17 +645,23 @@ class DatabaseManager:
 
                 total_stock_value += mkt_val
                 total_unrealized_pnl += unreal_pnl
+                if s_book == "CORE":
+                    core_stock_value += mkt_val
+                else:
+                    quant_stock_value += mkt_val
 
                 conn.execute("""
                     UPDATE portfolio
                     SET current_price = ?, market_value = ?, 
                         unrealized_pnl = ?, unrealized_pnl_pct = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE account = ? AND ticker = ?;
-                """, (close_p, mkt_val, unreal_pnl, unreal_pct, acc, t))
+                    WHERE account = ? AND ticker = ? AND strategy_book = ?;
+                """, (close_p, mkt_val, unreal_pnl, unreal_pct, acc, t, s_book))
 
             # Lấy tổng số dư tiền mặt của tất cả tài khoản
             cash = self.get_current_cash()
             total_nav = cash + total_stock_value
+            core_nav = core_stock_value + (cash * 0.70)
+            quant_nav = quant_stock_value + (cash * 0.30)
 
             if total_nav > 0:
                 conn.execute("""
@@ -586,12 +687,12 @@ class DatabaseManager:
 
             conn.execute("""
                 INSERT OR REPLACE INTO nav_daily (
-                    trade_date, total_nav, cash_balance, stock_value,
+                    trade_date, total_nav, cash_balance, stock_value, core_nav, quant_nav,
                     daily_pnl, daily_pnl_pct, cumulative_pnl, realized_pnl, unrealized_pnl,
                     nav_per_share, notes, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);
             """, (
-                trade_date, total_nav, cash, total_stock_value,
+                trade_date, total_nav, cash, total_stock_value, core_nav, quant_nav,
                 daily_pnl, daily_pnl_pct, cumulative_pnl, realized_pnl, total_unrealized_pnl,
                 10000.0, notes
             ))
@@ -603,6 +704,8 @@ class DatabaseManager:
             "total_nav": total_nav,
             "cash_balance": cash,
             "stock_value": total_stock_value,
+            "core_nav": core_nav,
+            "quant_nav": quant_nav,
             "daily_pnl": daily_pnl,
             "daily_pnl_pct": daily_pnl_pct,
             "cumulative_pnl": cumulative_pnl,
@@ -722,3 +825,95 @@ class DatabaseManager:
                 "realized_pnl": realized_pnl,
                 "unrealized_pnl": unrealized_pnl
             }
+
+    # ==========================================
+    # BIÊN BẢN HỌP HỘI ĐỒNG ĐẦU TƯ (DECISION MEMOS)
+    # ==========================================
+    def save_decision_memo(self, memo_data: Dict[str, Any]) -> str:
+        """Lưu biên bản họp Ủy ban Đầu tư AI vào database"""
+        memo_id = memo_data.get("memo_id") or f"MEMO-{datetime.now().strftime('%Y%m%d%H%M%S%f')}-{memo_data.get('ticker', 'VN')}"
+        trade_date = memo_data.get("trade_date") or date.today().strftime("%Y-%m-%d")
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        def _stringify(val):
+            if isinstance(val, (dict, list)):
+                return json.dumps(val, ensure_ascii=False)
+            return str(val) if val is not None else ""
+
+        with self.get_connection() as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO decision_memos (
+                    memo_id, ticker, strategy_book, trade_date, action, target_price, stop_loss_price,
+                    target_volume, macro_view, fa_summary, ta_ml_summary, bull_arguments,
+                    bear_arguments, cro_verdict, cro_position_size, cio_decision, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """, (
+                memo_id,
+                memo_data.get("ticker", "").upper(),
+                memo_data.get("strategy_book", "QUANT").upper(),
+                trade_date,
+                memo_data.get("action", "BUY").upper(),
+                float(memo_data.get("target_price", 0.0)),
+                float(memo_data.get("stop_loss_price", 0.0)),
+                int(memo_data.get("target_volume", 0)),
+                _stringify(memo_data.get("macro_view", "")),
+                _stringify(memo_data.get("fa_summary", "")),
+                _stringify(memo_data.get("ta_ml_summary", "")),
+                _stringify(memo_data.get("bull_arguments", "")),
+                _stringify(memo_data.get("bear_arguments", "")),
+                _stringify(memo_data.get("cro_verdict", "APPROVED")),
+                float(memo_data.get("cro_position_size", 0.0)),
+                _stringify(memo_data.get("cio_decision", "")),
+                memo_data.get("status", "PROPOSED"),
+                now_str
+            ))
+            conn.commit()
+        return memo_id
+
+    @staticmethod
+    def _parse_memo_row(r) -> Dict[str, Any]:
+        d = dict(r)
+        json_cols = ['macro_view', 'fa_summary', 'ta_ml_summary', 'bull_arguments', 'bear_arguments', 'cro_verdict', 'cio_decision']
+        for c in json_cols:
+            val = d.get(c)
+            if isinstance(val, str) and (val.strip().startswith('{') or val.strip().startswith('[')):
+                try:
+                    d[c] = json.loads(val)
+                except Exception:
+                    pass
+        return d
+
+    def get_decision_memos(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Lấy danh sách các biên bản họp Ủy ban Đầu tư"""
+        with self.get_connection() as conn:
+            rows = conn.execute("""
+                SELECT * FROM decision_memos 
+                ORDER BY created_at DESC 
+                LIMIT ?;
+            """, (limit,)).fetchall()
+            return [self._parse_memo_row(r) for r in rows]
+
+    def get_decision_memo_by_id(self, memo_id: str) -> Optional[Dict[str, Any]]:
+        """Lấy chi tiết biên bản họp theo memo_id"""
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM decision_memos WHERE memo_id = ?;", (memo_id,)).fetchone()
+            return self._parse_memo_row(row) if row else None
+
+    def update_memo_status(self, memo_id: str, status: str, notes: Optional[str] = None) -> bool:
+        """Cập nhật trạng thái phê duyệt của Tờ trình (APPROVED / REJECTED)"""
+        with self.get_connection() as conn:
+            conn.execute("""
+                UPDATE decision_memos 
+                SET status = ? 
+                WHERE memo_id = ?;
+            """, (status.upper(), memo_id))
+            # Nếu có liên kết với order_history, đồng bộ trạng thái lệnh
+            order_status = "SUBMITTED" if status.upper() == "APPROVED" else ("CANCELLED" if status.upper() == "REJECTED" else None)
+            if order_status:
+                conn.execute("""
+                    UPDATE order_history 
+                    SET status = ? 
+                    WHERE memo_id = ?;
+                """, (order_status, memo_id))
+            conn.commit()
+            return True

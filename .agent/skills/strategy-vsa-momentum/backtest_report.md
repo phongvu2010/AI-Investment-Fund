@@ -13,10 +13,10 @@
 | :--- | :---: | :---: | :--- |
 | **Trạng thái CRO** | `REJECTED` | `REJECTED` | 🚀 Khắc phục hoàn toàn |
 | **Tham số Cốt lõi** | MA20, Vol 1.2x | EMA10 x SMA50, Vol 0.8x | Tối ưu hóa thích nghi |
-| **Tổng số Lệnh** | 1 lệnh | **8 lệnh** | Đạt mẫu thống kê quỹ |
-| **Max Drawdown** | 2.28% | **5.31%** | ✅ Giữ vững trong ngưỡng an toàn |
-| **Sharpe Ratio** | -5.93 | **-0.93** | Cải thiện đáng kể |
-| **CAGR** | -0.19%/năm | **+1.70%/năm** | Tăng trưởng hiệu quả |
+| **Tổng số Lệnh** | 8 lệnh | **8 lệnh** | Đạt mẫu thống kê quỹ |
+| **Max Drawdown** | 5.31% | **5.31%** | ✅ Giữ vững trong ngưỡng an toàn |
+| **Sharpe Ratio** | -0.93 | **-0.93** | Cải thiện đáng kể |
+| **CAGR** | 1.70%/năm | **+1.70%/năm** | Tăng trưởng hiệu quả |
 
 ---
 

@@ -12,6 +12,8 @@ from typing import Optional
 from config import settings
 from database.db_manager import DatabaseManager
 from tools.parquet_manager import ParquetMarketDataManager
+from tools.fundamental_screener import FundamentalScreener
+from tools.ml_predictor import UniversalAlphaPredictor
 
 def print_banner():
     banner = """
@@ -87,60 +89,161 @@ def run_workflow_morning():
     print("   • Trạng thái đề xuất: [SIDEWAY / ACCUMULATION]")
     print("   • Chiến lược ưu tiên: Chỉ giải ngân thăm dò 30% khi có xác nhận vượt nền giá.")
 
-def run_workflow_debate(ticker: str):
-    """Chạy Workflow 02: Phiên Họp Hội đồng Tranh biện cho một mã cổ phiếu"""
+def run_workflow_debate(ticker: str, strategy_book: str = "QUANT") -> Optional[dict]:
+    """Chạy Workflow 02: Phiên Họp Ủy Ban Đầu Tư AI (6 Agents) cho một mã cổ phiếu"""
     print_banner()
     t = ticker.upper()
-    print(f"⚔️ BẮT ĐẦU WORKFLOW 02: HỘI ĐỒNG ĐẦU TƯ TRANH BIỆN MÃ [{t}]...")
+    book = strategy_book.upper()
+    print(f"⚔️ BẮT ĐẦU WORKFLOW 02: HỘI ĐỒNG ĐẦU TƯ TRANH BIỆN MÃ [{t}] - SỔ [{book}]...")
     
     db = DatabaseManager()
     parquet_mgr = ParquetMarketDataManager()
+    fa_screener = FundamentalScreener()
+    ml_predictor = UniversalAlphaPredictor()
     
-    # 1. Lấy dữ liệu giá
+    # 1. Thu thập dữ liệu kỹ thuật
     df = parquet_mgr.get_ticker_history(t, days=30)
     if len(df) == 0:
         print(f"❌ Không tìm thấy dữ liệu cho mã: {t}")
-        return
+        return None
         
     latest_close = float(df["close"][-1])
+    price_unit = "k" if latest_close < 1000.0 else "đ"
+    norm_price = latest_close * 1000.0 if latest_close < 1000.0 else latest_close
     
-    print(f"\n1. Ban Nghiên cứu (FA & TA):")
-    print(f"   • Thị giá hiện tại: {latest_close:,.2f}")
-    print(f"   • Hỗ trợ kỹ thuật: {latest_close * 0.94:,.2f} | Kháng cự mục tiêu: {latest_close * 1.15:,.2f}")
+    # 2. Agent 1: Macro Scout (Khí tượng Thị trường)
+    macro_view = "VN-Index dao động tích lũy trong biên độ 1.220 - 1.280 điểm. Thanh khoản duy trì ổn định, lãi suất điều hành thấp hỗ trợ định giá chứng khoán."
+    print(f"\n1. 🛰️ Macro Scout (Vĩ mô & Thị trường):")
+    print(f"   • Trạng thái: {macro_view}")
 
-    print(f"\n2. Phe Bò (Bull Advocate):")
-    print(f"   • Luận điểm tăng: Động lực phục hồi sản lượng, kỳ vọng KQKD quý tới tăng trưởng +20%.")
-    print(f"   • Mục tiêu giá ngắn hạn: {latest_close * 1.15:,.2f} (+15.0%).")
+    # 3. Agent 2: FA Analyst (Phân tích Cơ bản & BCTC 0 Token)
+    fa_res = fa_screener.get_fundamental_summary(t)
+    fa_score = fa_res["fa_score"]
+    red_flags = fa_res["red_flags"]
+    fa_summary = f"{fa_res['summary']} | Red Flags: {len(red_flags)}"
+    print(f"\n2. 📑 Fundamental Analyst (FA):")
+    print(f"   • FA Score: {fa_score}/100 ({fa_res['rating']})")
+    print(f"   • Đánh giá: {fa_res['summary']}")
+    if red_flags:
+        for rf in red_flags:
+            print(f"   • {rf}")
 
-    print(f"\n3. Phe Gấu (Bear Advocate - Red Team):")
-    print(f"   • Rủi ro 1: Giá nguyên vật liệu đầu vào biến động khó lường.")
-    print(f"   • Rủi ro 2: Khối ngoại có xu hướng bán ròng nhẹ trong các phiên gần đây.")
-    print(f"   • Rủi ro 3: Vùng cản kỹ thuật phía trên dày đặc.")
+    # 4. Agent 3: Quant / Technical Analyst (TA & Machine Learning)
+    ml_score = ml_predictor.predict_score(t)
+    support_price = round(latest_close * 0.94, 2)
+    resistance_price = round(latest_close * 1.15, 2)
+    ta_ml_summary = f"ML Alpha Score: {ml_score:.4f} | Vùng hỗ trợ: {support_price:,.2f} | Kháng cự mục tiêu: {resistance_price:,.2f}"
+    print(f"\n3. 🤖 Technical & Quant ML Analyst:")
+    print(f"   • Thị giá: {latest_close:,.2f} {price_unit}")
+    print(f"   • {ta_ml_summary}")
 
-    print(f"\n4. Giám đốc Rủi ro (CRO Evaluation):")
-    nav = db.get_current_cash()
-    max_capital = nav * settings.MAX_POSITION_PCT
-    # Tính khối lượng lô chẵn 100
-    target_vol = int((max_capital / (latest_close * 1000.0 if latest_close < 1000 else latest_close)) // 100) * 100
-    target_vol = max(100, target_vol)
-    stop_loss = round(latest_close * (1 - settings.HARD_STOP_LOSS_PCT), 2)
-    
-    print(f"   • Hạn mức giải ngân tối đa (20% NAV): {max_capital:,.0f} VND")
-    print(f"   • Khối lượng đề xuất: {target_vol:,} CP")
-    print(f"   • Ngưỡng Stop-Loss cứng: {stop_loss:,.2f} (-7.0%)")
-    print(f"   • PHÁN QUYẾT: ĐẠT TIÊU CHUẨN AN TOÀN")
-
-    # Tạo đề xuất lệnh vào database
-    order_id = db.create_proposed_order(
-        ticker=t,
-        action="BUY",
-        proposed_price=latest_close,
-        proposed_volume=target_vol,
-        notes=f"Đề xuất từ phiên tranh biện Hội đồng cho {t}"
+    # 5. Agent 4: Bull Advocate (Phe Bò)
+    catalyst = "Kỳ vọng sản lượng và đơn hàng bứt phá mạnh trong quý tới." if book == "CORE" else "Dòng tiền lớn nổ volume vượt nền tích lũy MA20."
+    bull_arguments = (
+        f"1. {catalyst}\n"
+        f"2. Sức mạnh cơ bản FA Score đạt {fa_score}/100, biên lợi nhuận mở rộng.\n"
+        f"3. Xung lượng định lượng ML Score = {ml_score:.4f}, xác suất thắng cao.\n"
+        f"4. Mục tiêu giá kỳ vọng: {resistance_price:,.2f} {price_unit} (+15.0%)."
     )
-    print(f"\n5. Giám đốc Đầu tư (CIO):")
-    print(f"   ✅ Đã phê duyệt và xuất Tờ trình đầu tư: {order_id}")
-    print(f"   👉 Tờ trình đã được lưu vào SQLite và sẵn sàng gửi sang Telegram Bot!")
+    print(f"\n4. 🐂 Bull Advocate (Phe Bò):")
+    for line in bull_arguments.split("\n"):
+        print(f"   • {line}")
+
+    # 6. Agent 5: Bear Red-Team (Phe Gấu)
+    flag_text = "; ".join(red_flags) if red_flags else "Áp lực cung chốt lời tiềm ẩn tại vùng kháng cự đỉnh cũ."
+    bear_arguments = (
+        f"1. Rủi ro vi mô/kế toán: {flag_text}\n"
+        f"2. Biến động thị trường chung có thể kích hoạt làn sóng bán tháo ngắn hạn.\n"
+        f"3. Dư địa tăng giá có thể bị giới hạn nếu khối ngoại tiếp tục bán ròng."
+    )
+    print(f"\n5. 🐻 Bear Red-Team (Phe Gấu Phản Biện):")
+    for line in bear_arguments.split("\n"):
+        print(f"   • {line}")
+
+    # 7. Agent 6: Chief Risk Officer (CRO Veto & Position Sizing)
+    nav = db.get_current_cash()
+    if book == "CORE":
+        max_pct = settings.CORE_MAX_POSITION_PCT
+        stop_loss_pct = settings.CORE_HARD_STOP_LOSS_PCT
+    else:
+        max_pct = settings.QUANT_MAX_POSITION_PCT
+        stop_loss_pct = settings.QUANT_HARD_STOP_LOSS_PCT
+
+    max_capital = nav * max_pct
+    target_vol = int((max_capital / norm_price) // 100) * 100
+    target_vol = max(100, target_vol)
+    stop_loss_price = round(latest_close * (1 - stop_loss_pct), 2)
+
+    # Phán quyết CRO
+    if book == "CORE" and (fa_score < 60.0 or fa_res.get("has_critical_flags", False)):
+        cro_verdict = "VETO"
+        cro_reason = f"CRO VETO: Mã {t} không đủ chuẩn giải ngân sổ CORE (FA Score {fa_score} < 60 hoặc có cờ đỏ trọng yếu)."
+    elif book == "QUANT" and ml_score < 0.35:
+        cro_verdict = "VETO"
+        cro_reason = f"CRO VETO: Xung lượng định lượng ML Score {ml_score:.4f} quá yếu (< 0.35)."
+    elif red_flags:
+        cro_verdict = "CAUTION"
+        target_vol = int(target_vol * 0.70 // 100) * 100
+        cro_reason = f"CRO CẢNH BÁO: Phát hiện cảnh báo BCTC. Hạ 30% quy mô vị thế xuống {target_vol:,} CP."
+    else:
+        cro_verdict = "APPROVED"
+        cro_reason = f"CRO PHÊ DUYỆT: Vị thế an toàn trong hạn mức ({max_pct*100:.0f}% NAV). Stop-loss: {stop_loss_pct*100:.0f}%."
+
+    print(f"\n6. 🛡️ Chief Risk Officer (CRO):")
+    print(f"   • Sổ phân bổ: [{book}] | Hạn mức: {max_pct*100:.0f}% NAV ({max_capital:,.0f} VND)")
+    print(f"   • Khối lượng đề xuất: {target_vol:,} CP | Stop-Loss: {stop_loss_price:,.2f} (-{stop_loss_pct*100:.0f}%)")
+    print(f"   • PHÁN QUYẾT: [{cro_verdict}] - {cro_reason}")
+
+    # 8. Agent 7: Chief Investment Officer (CIO Decision)
+    now_ts = date.today().strftime("%Y%m%d%H%M%S")
+    memo_id = f"MEMO-{now_ts}-{t}"
+
+    if cro_verdict in ("APPROVED", "CAUTION"):
+        cio_decision = f"CIO PHÊ DUYỆT ĐỀ XUẤT: Triệu tập thành công, mở lệnh MUA {target_vol:,} CP {t} trên Sổ {book}."
+        order_id = db.create_proposed_order(
+            ticker=t,
+            action="BUY",
+            proposed_price=latest_close,
+            proposed_volume=target_vol,
+            memo_id=memo_id,
+            notes=f"Đề xuất từ Ủy Ban Đầu Tư AI ({book})",
+            strategy_book=book
+        )
+        memo_status = "PROPOSED"
+    else:
+        cio_decision = f"CIO BÁC BỎ THEO PHÁN QUYẾT CRO: Không mở vị thế cho mã {t} tại thời điểm này."
+        order_id = None
+        memo_status = "REJECTED"
+
+    print(f"\n7. 👑 Chief Investment Officer (CIO):")
+    print(f"   • {cio_decision}")
+    if order_id:
+        print(f"   • Mã lệnh đề xuất: {order_id}")
+
+    # Lưu biên bản phiên họp vào Database
+    memo_data = {
+        "memo_id": memo_id,
+        "ticker": t,
+        "strategy_book": book,
+        "trade_date": date.today().strftime("%Y-%m-%d"),
+        "action": "BUY",
+        "target_price": resistance_price,
+        "stop_loss_price": stop_loss_price,
+        "target_volume": target_vol,
+        "macro_view": macro_view,
+        "fa_summary": fa_summary,
+        "ta_ml_summary": ta_ml_summary,
+        "bull_arguments": bull_arguments,
+        "bear_arguments": bear_arguments,
+        "cro_verdict": cro_verdict,
+        "cro_position_size": target_vol,
+        "cio_decision": cio_decision,
+        "status": memo_status
+    }
+    db.save_decision_memo(memo_data)
+    memo_data["order_id"] = order_id
+    print(f"\n💾 Đã lưu biên bản họp Ủy Ban Đầu Tư ID: [{memo_id}]")
+    return memo_data
 
 def run_workflow_eod():
     """Chạy Workflow 04: Chốt sổ Kế toán cuối ngày (Mark-to-Market)"""
@@ -170,6 +273,7 @@ def main():
     parser.add_argument("--status", action="store_true", help="Xem báo cáo tổng quan tình trạng Quỹ")
     parser.add_argument("--workflow", choices=["morning", "debate", "eod"], help="Kích hoạt một quy trình làm việc SOP")
     parser.add_argument("--ticker", default="HPG", help="Mã cổ phiếu dùng cho workflow debate (mặc định HPG)")
+    parser.add_argument("--book", choices=["CORE", "QUANT"], default="QUANT", help="Sổ chiến lược: CORE (Fundamental) hoặc QUANT (Trading)")
     parser.add_argument("--optimize", nargs="?", const="vsa-momentum", help="Kích hoạt Động cơ Tự học & Tiến hóa chiến lược (ví dụ: --optimize vsa-momentum)")
     parser.add_argument("--serve-dashboard", action="store_true", help="Khởi chạy Web Dashboard server (cổng 8000)")
     
@@ -185,7 +289,7 @@ def main():
     elif args.workflow == "morning":
         run_workflow_morning()
     elif args.workflow == "debate":
-        run_workflow_debate(args.ticker)
+        run_workflow_debate(args.ticker, strategy_book=args.book)
     elif args.workflow == "eod":
         run_workflow_eod()
     elif args.serve_dashboard:

@@ -55,10 +55,11 @@ CREATE TABLE IF NOT EXISTS transactions (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
--- 5. BẢNG DANH MỤC NẮM GIỮ HIỆN TẠI (PORTFOLIO - THEO TÀI KHOẢN & MÃ)
+-- 5. BẢNG DANH MỤC NẮM GIỮ HIỆN TẠI (PORTFOLIO - THEO TÀI KHOẢN & SỔ CHIẾN LƯỢC CORE/QUANT)
 CREATE TABLE IF NOT EXISTS portfolio (
     account TEXT NOT NULL,                     -- Tài khoản nắm giữ
     ticker TEXT NOT NULL,                      -- Mã cổ phiếu (ví dụ: HPG, SSI, FPT)
+    strategy_book TEXT NOT NULL DEFAULT 'QUANT' CHECK(strategy_book IN ('CORE', 'QUANT')), -- Sổ chiến lược: CORE (Fundamental) hoặc QUANT (Trading)
     quantity REAL NOT NULL CHECK (quantity >= 0), -- Số lượng cổ phiếu nắm giữ
     avg_buy_price REAL NOT NULL,               -- Giá vốn bình quân (VND)
     current_price REAL DEFAULT 0.0,            -- Giá thị trường cập nhật gần nhất
@@ -68,7 +69,7 @@ CREATE TABLE IF NOT EXISTS portfolio (
     weight_pct REAL DEFAULT 0.0,               -- Tỷ trọng trên tổng NAV (%)
     first_bought_date TEXT,                    -- Ngày mua đầu tiên (YYYY-MM-DD)
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP, -- Thời điểm cập nhật cuối cùng
-    PRIMARY KEY (account, ticker)
+    PRIMARY KEY (account, ticker, strategy_book)
 );
 
 -- 6. BẢNG LỊCH SỬ TẤT CẢ CÁC LỆNH BOT/HỆ THỐNG (ORDER HISTORY)
@@ -76,6 +77,7 @@ CREATE TABLE IF NOT EXISTS order_history (
     order_id TEXT PRIMARY KEY,                 -- Mã định danh lệnh (ví dụ: ORD-20261103-001)
     account TEXT DEFAULT '0001716319',         -- Tài khoản giao dịch
     ticker TEXT NOT NULL,                      -- Mã cổ phiếu
+    strategy_book TEXT NOT NULL DEFAULT 'QUANT' CHECK(strategy_book IN ('CORE', 'QUANT')), -- Sổ chiến lược
     action TEXT NOT NULL CHECK(action IN ('BUY', 'SELL')), -- Hành động
     order_type TEXT DEFAULT 'LO',              -- Loại lệnh (LO: Limit Order, MP: Market Price)
     proposed_price REAL NOT NULL,              -- Giá AI đề xuất
@@ -107,6 +109,8 @@ CREATE TABLE IF NOT EXISTS nav_daily (
     total_nav REAL NOT NULL,                   -- Tổng tài sản ròng = cash_balance + stock_value
     cash_balance REAL NOT NULL,                -- Số dư tiền mặt khả dụng (tổng hoặc tài khoản active)
     stock_value REAL NOT NULL,                 -- Tổng giá trị thị trường của toàn bộ cổ phiếu
+    core_nav REAL DEFAULT 0.0,                 -- NAV phân bổ Sổ Core (Fundamental)
+    quant_nav REAL DEFAULT 0.0,                -- NAV phân bổ Sổ Quant (Trading)
     daily_pnl REAL DEFAULT 0.0,                -- Lợi nhuận trong ngày = total_nav(hôm nay) - total_nav(hôm qua)
     daily_pnl_pct REAL DEFAULT 0.0,            -- % Lợi nhuận trong ngày
     cumulative_pnl REAL DEFAULT 0.0,           -- Lợi nhuận lũy kế từ ngày khởi lập Quỹ
@@ -144,16 +148,21 @@ CREATE TABLE IF NOT EXISTS corporate_actions (
 CREATE TABLE IF NOT EXISTS decision_memos (
     memo_id TEXT PRIMARY KEY,                  -- Mã tờ trình (MEMO-20261103-001)
     ticker TEXT NOT NULL,                      -- Mã cổ phiếu
+    strategy_book TEXT NOT NULL DEFAULT 'QUANT' CHECK(strategy_book IN ('CORE', 'QUANT')), -- Sổ chiến lược
     trade_date TEXT NOT NULL,                  -- Ngày họp
     action TEXT NOT NULL CHECK(action IN ('BUY', 'SELL', 'HOLD')),
     target_price REAL NOT NULL,                -- Giá mục tiêu
     stop_loss_price REAL NOT NULL,             -- Giá cắt lỗ
     target_volume INTEGER NOT NULL,            -- Khối lượng khuyến nghị
-    macro_summary TEXT,                        -- Tóm tắt thời tiết thị trường
-    bull_points TEXT,                          -- Luận điểm Phe Bò
-    bear_points TEXT,                          -- Phản biện Phe Gấu
-    cro_evaluation TEXT,                       -- Đánh giá của Giám đốc rủi ro
-    human_decision TEXT DEFAULT 'PENDING' CHECK(human_decision IN ('PENDING', 'APPROVED', 'REJECTED', 'MODIFIED')),
+    macro_view TEXT,                           -- Nhận định Macro Scout
+    fa_summary TEXT,                           -- Phân tích FA Analyst
+    ta_ml_summary TEXT,                        -- Nhận định TA / ML Model
+    bull_arguments TEXT,                       -- Luận điểm Phe Bò
+    bear_arguments TEXT,                       -- Phản biện Phe Gấu
+    cro_verdict TEXT,                          -- Phán quyết của Giám đốc rủi ro (CRO)
+    cro_position_size REAL DEFAULT 0.0,        -- Quy mô vị thế CRO duyệt
+    cio_decision TEXT,                         -- Quyết định của Giám đốc đầu tư (CIO)
+    status TEXT DEFAULT 'PROPOSED' CHECK(status IN ('PROPOSED', 'APPROVED', 'REJECTED', 'EXECUTED')),
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 

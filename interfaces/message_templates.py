@@ -20,21 +20,25 @@ class TelegramMessageFormatter:
         target_price: float,
         bull_points: str,
         bear_points: str,
-        nav_weight_pct: float
+        nav_weight_pct: float,
+        strategy_book: str = "QUANT"
     ) -> str:
-        """Định dạng Tờ trình Đầu tư gửi Bạn phê duyệt"""
+        """Định dạng Tờ trình Đầu tư gửi Bạn phê duyệt kèm Badge Chiến lược Dual-Book"""
         action_emoji = "🟢 [KHUYẾN NGHỊ MUA]" if action.upper() == "BUY" else "🔴 [KHUYẾN NGHỊ BÁN]"
+        book_badge = "📘 [CORE - FUNDAMENTAL]" if strategy_book.upper() == "CORE" else "⚡ [QUANT - TRADING]"
         total_val = (proposed_price * proposed_volume)
         price_unit = "k" if proposed_price < 1000.0 else "đ"
+        sl_pct = "-15.0%" if strategy_book.upper() == "CORE" else "-7.0%"
 
         msg = (
             f"🎯 <b>{action_emoji} - {ticker.upper()}</b>\n"
+            f"🏷️ <b>Sổ Chiến Lược:</b> <code>{book_badge}</code>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"• <b>Mã lệnh:</b> <code>{order_id}</code>\n"
             f"• <b>Vùng giá đề xuất:</b> <code>{proposed_price:,.2f} {price_unit}</code>\n"
             f"• <b>Khối lượng:</b> <code>{proposed_volume:,} CP</code> (~{total_val:,.0f} {price_unit})\n"
             f"• <b>Tỷ trọng danh mục:</b> <code>{nav_weight_pct:.1f}% NAV</code>\n"
-            f"• <b>Cắt lỗ (Stop-loss):</b> <code>{stop_loss_price:,.2f} {price_unit}</code> (-7.0%)\n"
+            f"• <b>Cắt lỗ (Stop-loss):</b> <code>{stop_loss_price:,.2f} {price_unit}</code> ({sl_pct})\n"
             f"• <b>Mục tiêu 1 (Target):</b> <code>{target_price:,.2f} {price_unit}</code> (+15.0%)\n\n"
             f"🐂 <b>Luận điểm Phe Bò:</b>\n"
             f"<i>{bull_points}</i>\n\n"
@@ -96,8 +100,10 @@ class TelegramMessageFormatter:
             total_unreal += unreal_pnl
 
             icon = "🟢" if unreal_pnl >= 0 else "🔴"
+            s_book = item.get("strategy_book", "QUANT")
+            book_tag = " [CORE]" if s_book == "CORE" else " [QUANT]"
             msg += (
-                f"🔹 <b>{t}</b> | {icon} <code>{unreal_pct:+.2f}%</code>\n"
+                f"🔹 <b>{t}</b><code>{book_tag}</code> | {icon} <code>{unreal_pct:+.2f}%</code>\n"
                 f"   • Khối lượng: <code>{q:,} CP</code>\n"
                 f"   • Giá vốn: <code>{avg_p:,.2f}</code> ➔ Thị giá: <code>{cur_p:,.2f}</code>\n"
                 f"   • Lãi/Lỗ: <code>{unreal_pnl:+,.0f} VND</code>\n\n"

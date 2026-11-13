@@ -26,23 +26,26 @@ class MLFeatureExtractor:
     def __init__(
         self,
         parquet_path: Optional[Path] = None,
-        take_profit_pct: float = 0.05,  # Rào cản trên: +5.0%
-        stop_loss_pct: float = 0.03,    # Rào cản dưới: -3.0%
-        barrier_bars: int = 5           # Khung thời gian nắm giữ tối đa: 5 phiên (T+2.5)
+        take_profit_pct: float = 0.05,  # Rào cản trên cố định (nếu không dùng ATR)
+        stop_loss_pct: float = 0.03,    # Rào cản dưới cố định (nếu không dùng ATR)
+        barrier_bars: int = 7,          # Khung thời gian nắm giữ tối đa: 7 phiên (T+2.5 linh hoạt)
+        use_atr_barrier: bool = True    # Bật tính năng Dynamic ATR Triple-Barrier (+1.8 ATR / -1.2 ATR)
     ):
         self.parquet_path = parquet_path or settings.MARKET_PARQUET_PATH
         self.tp_pct = take_profit_pct
         self.sl_pct = stop_loss_pct
         self.barrier_bars = barrier_bars
+        self.use_atr_barrier = use_atr_barrier
 
-        # Danh sách 15 đặc trưng chuẩn hóa (Stationary Features)
+        # Danh sách đặc trưng chuẩn hóa và Chế độ thị trường (Market Regime Features)
         self.feature_columns = [
             "ret_1d", "ret_3d", "ret_5d", "ret_10d", "ret_20d",
             "rel_ret_5d", "rel_ret_20d",
             "vol_ratio_20", "vol_zscore_60",
             "norm_atr_14", "bb_width_20",
             "body_to_range", "upper_wick_ratio", "lower_wick_ratio",
-            "rsi_14", "macd_hist_norm"
+            "rsi_14", "macd_hist_norm",
+            "market_ret_20d", "market_breadth_ma20", "rel_vol_to_market"
         ]
 
     def _extract_ticker_features(self, df_ticker: pl.DataFrame) -> pl.DataFrame:
@@ -83,6 +86,7 @@ class MLFeatureExtractor:
         bb_mid = close.rolling_mean(window_size=20)
         bb_std = close.rolling_std(window_size=20)
         bb_width_20 = (4.0 * bb_std) / pl.when(bb_mid == 0).then(1.0).otherwise(bb_mid)
+        above_ma20 = (close > bb_mid).cast(pl.Float64)
 
         # Cấu trúc nến (Candlestick Ratios)
         full_range = high - low + 1e-8
@@ -116,8 +120,10 @@ class MLFeatureExtractor:
             ret_20d.alias("ret_20d"),
             vol_ratio_20.alias("vol_ratio_20"),
             vol_zscore_60.alias("vol_zscore_60"),
+            atr_14.alias("atr_14"),
             norm_atr_14.alias("norm_atr_14"),
             bb_width_20.alias("bb_width_20"),
+            above_ma20.alias("above_ma20"),
             body_to_range.alias("body_to_range"),
             upper_wick_ratio.alias("upper_wick_ratio"),
             lower_wick_ratio.alias("lower_wick_ratio"),
@@ -129,30 +135,36 @@ class MLFeatureExtractor:
 
     def _apply_triple_barrier_labeling(self, df_ticker: pl.DataFrame) -> pl.DataFrame:
         """
-        Gán nhãn theo phương pháp Triple-Barrier (3 Rào Cản):
-        Tại mỗi nến t, nhìn về phía trước H phiên:
-        - Rào cản trên (+5.0%): Nếu chạm rào cản trên trước -> Label = 1 (Thắng)
-        - Rào cản dưới (-3.0%): Nếu chạm rào cản dưới trước -> Label = 0 (Thua / Cắt lỗ)
-        - Rào cản thời gian (5 phiên): Nếu sau 5 phiên không chạm đâu, xét lợi nhuận cuối kỳ (> +2% -> 1, ngược lại 0)
+        Gán nhãn theo phương pháp Dynamic Triple-Barrier (3 Rào Cản Động theo ATR):
+        Tại mỗi nến t, nhìn về phía trước H phiên (mặc định 7 phiên):
+        - Rào cản trên (+1.8 * ATR_14): Nếu chạm rào cản trên trước -> Label = 1 (Thắng)
+        - Rào cản dưới (-1.2 * ATR_14): Nếu chạm rào cản dưới trước -> Label = 0 (Thua / Cắt lỗ)
+        - Rào cản thời gian (7 phiên): Nếu sau 7 phiên không chạm đâu, xét lợi nhuận cuối kỳ (> +2% -> 1, ngược lại 0)
         """
         n = len(df_ticker)
         closes = df_ticker["close"].to_numpy()
         highs = df_ticker["high"].to_numpy()
         lows = df_ticker["low"].to_numpy()
+        atrs = df_ticker["atr_14"].to_numpy() if "atr_14" in df_ticker.columns else (closes * 0.02)
 
         labels = np.zeros(n, dtype=np.int32)
         forward_returns = np.zeros(n, dtype=np.float64)
 
         for i in range(n):
             if i + self.barrier_bars >= n:
-                # Những phiên cuối cùng chưa đủ 5 phiên thì gán nhãn mặc định hoặc lọc bỏ
+                # Những phiên cuối cùng chưa đủ rào cản thời gian thì gán nhãn mặc định hoặc lọc bỏ
                 labels[i] = -1
                 forward_returns[i] = 0.0
                 continue
 
             entry_price = closes[i]
-            upper_barrier = entry_price * (1.0 + self.tp_pct)
-            lower_barrier = entry_price * (1.0 - self.sl_pct)
+            if self.use_atr_barrier and atrs[i] is not None and atrs[i] > 0:
+                atr_val = atrs[i]
+                upper_barrier = entry_price + (1.8 * atr_val)
+                lower_barrier = entry_price - (1.2 * atr_val)
+            else:
+                upper_barrier = entry_price * (1.0 + self.tp_pct)
+                lower_barrier = entry_price * (1.0 - self.sl_pct)
 
             label = 0
             resolved = False
@@ -181,7 +193,7 @@ class MLFeatureExtractor:
                     break
 
             if not resolved:
-                # Hết 5 phiên mà không chạm ngưỡng nào: xét lãi cuối kỳ
+                # Hết barrier_bars phiên mà không chạm ngưỡng nào: xét lãi cuối kỳ
                 end_price = closes[i + self.barrier_bars]
                 ret = (end_price - entry_price) / entry_price
                 label = 1 if ret >= 0.02 else 0
@@ -200,8 +212,11 @@ class MLFeatureExtractor:
         """
         Xử lý toàn bộ kho dữ liệu Parquet:
         1. Tính đặc trưng kỹ thuật & nến cho từng mã cổ phiếu
-        2. Tính sức mạnh tương đối so với trung bình thị trường (Relative Returns)
-        3. Áp dụng gán nhãn 3 rào cản
+        2. Tính 3 đặc trưng chế độ thị trường chung (Market Regime):
+           - market_ret_20d: xu hướng 20 phiên toàn thị trường
+           - market_breadth_ma20: % số mã nằm trên MA20
+           - rel_vol_to_market: tương quan biến động/thanh khoản so với thị trường
+        3. Áp dụng gán nhãn 3 rào cản động (Dynamic ATR Triple-Barrier)
         4. Loại bỏ các dòng nhiễu hoặc chưa đủ dữ liệu ấm (warmup)
         """
         if not self.parquet_path.exists():
@@ -223,17 +238,19 @@ class MLFeatureExtractor:
 
         all_df = pl.concat(ticker_frames)
 
-        # 5. Tính Lợi suất Tương đối Toàn Sàn (Relative Return vs Market Mean)
-        # Tính lợi suất trung bình toàn sàn theo từng ngày giao dịch
-        market_mean_df = all_df.group_by("trade_date").agg([
+        # 5. Tính Nhóm Đặc trưng Chế độ Thị trường Chung (Market Regime Features)
+        market_stats_df = all_df.group_by("trade_date").agg([
             pl.col("ret_5d").mean().alias("mkt_ret_5d"),
-            pl.col("ret_20d").mean().alias("mkt_ret_20d")
+            pl.col("ret_20d").mean().alias("market_ret_20d"),
+            (pl.col("above_ma20").mean() * 100.0).alias("market_breadth_ma20"),
+            pl.col("vol_ratio_20").mean().alias("mkt_vol_ratio_20")
         ])
 
-        all_df = all_df.join(market_mean_df, on="trade_date", how="left")
+        all_df = all_df.join(market_stats_df, on="trade_date", how="left")
         all_df = all_df.with_columns([
             (pl.col("ret_5d") - pl.col("mkt_ret_5d")).alias("rel_ret_5d"),
-            (pl.col("ret_20d") - pl.col("mkt_ret_20d")).alias("rel_ret_20d")
+            (pl.col("ret_20d") - pl.col("market_ret_20d")).alias("rel_ret_20d"),
+            (pl.col("vol_ratio_20") / pl.when(pl.col("mkt_vol_ratio_20") <= 0).then(1.0).otherwise(pl.col("mkt_vol_ratio_20"))).alias("rel_vol_to_market")
         ])
 
         # Loại bỏ các dòng khởi động (warmup 60 phiên đầu) và các dòng cuối cùng chưa có nhãn

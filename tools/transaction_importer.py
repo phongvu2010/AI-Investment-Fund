@@ -291,9 +291,9 @@ class TransactionImporter:
                 w_pct = (mkt_val / tot_nav_active) * 100.0 if tot_nav_active > 0 else 0.0
                 conn.execute("""
                     INSERT OR REPLACE INTO portfolio (
-                        account, ticker, quantity, avg_buy_price, current_price, market_value,
+                        account, ticker, strategy_book, quantity, avg_buy_price, current_price, market_value,
                         unrealized_pnl, unrealized_pnl_pct, weight_pct, first_bought_date, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);
+                    ) VALUES (?, ?, 'QUANT', ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);
                 """, (acc_id, ticker, q, avg_p, cur_p, mkt_val, un_pnl, un_pct, w_pct, f_date))
 
             # 4. Nạp lịch sử NAV hàng ngày (nav_daily)
@@ -307,6 +307,7 @@ class TransactionImporter:
                 prev_nav = rec['total_nav']
                 nav_inserts.append((
                     rec['trade_date'], rec['total_nav'], rec['cash_balance'], rec['stock_value'],
+                    0.0, rec['total_nav'], # core_nav, quant_nav
                     daily_pnl, daily_pnl_pct, rec['cumulative_pnl'], rec['realized_pnl'], rec['unrealized_pnl'],
                     rec['notes']
                 ))
@@ -314,9 +315,10 @@ class TransactionImporter:
             conn.executemany("""
                 INSERT OR REPLACE INTO nav_daily (
                     trade_date, total_nav, cash_balance, stock_value,
+                    core_nav, quant_nav,
                     daily_pnl, daily_pnl_pct, cumulative_pnl, realized_pnl, unrealized_pnl,
                     notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """, nav_inserts)
 
             # Cập nhật cài đặt hệ thống

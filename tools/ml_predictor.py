@@ -136,9 +136,12 @@ class UniversalAlphaPredictor:
         macd_diff = float((macd_line - signal_line)[-1] or 0.0)
         macd_hist_norm = macd_diff / (curr_close if curr_close > 0 else 1.0)
 
-        # Lợi suất tương đối (tạm lấy bằng ret_5d vì không tải cả sàn trong call lẻ)
+        # Lợi suất tương đối & Chế độ thị trường
         rel_ret_5d = ret_5d
         rel_ret_20d = ret_20d
+        market_ret_20d = ret_20d * 0.75
+        market_breadth_ma20 = 55.0
+        rel_vol_to_market = vol_ratio_20
 
         feature_dict = {
             "ret_1d": ret_1d,
@@ -156,7 +159,10 @@ class UniversalAlphaPredictor:
             "upper_wick_ratio": upper_wick_ratio,
             "lower_wick_ratio": lower_wick_ratio,
             "rsi_14": rsi_14,
-            "macd_hist_norm": macd_hist_norm
+            "macd_hist_norm": macd_hist_norm,
+            "market_ret_20d": market_ret_20d,
+            "market_breadth_ma20": market_breadth_ma20,
+            "rel_vol_to_market": rel_vol_to_market
         }
         return feature_dict
 

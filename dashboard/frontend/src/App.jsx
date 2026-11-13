@@ -3,7 +3,8 @@ import {
   TrendingUp, TrendingDown, DollarSign, PieChart, ShieldAlert, 
   RefreshCw, PlusCircle, CheckCircle2, Clock, AlertTriangle, 
   ExternalLink, FileText, ArrowUpRight, ArrowDownRight, Activity,
-  Brain, Cpu, Download, Upload, Database, Sparkles, FileSpreadsheet, Check
+  Brain, Cpu, Download, Upload, Database, Sparkles, FileSpreadsheet, Check,
+  Globe, Lock, Award, Users, CheckCircle, XCircle, Send, Gavel, Scale
 } from 'lucide-react';
 
 export default function App() {
@@ -12,6 +13,7 @@ export default function App() {
   const [portfolio, setPortfolio] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState('ALL');
+  const [selectedBook, setSelectedBook] = useState('ALL');
   const [orders, setOrders] = useState([]);
   const [reports, setReports] = useState([]);
   const [activeTab, setActiveTab] = useState('portfolio');
@@ -25,6 +27,15 @@ export default function App() {
   const [mlUploading, setMlUploading] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Live Investment Committee State
+  const [committeeMemos, setCommitteeMemos] = useState([]);
+  const [agentsTelemetry, setAgentsTelemetry] = useState([]);
+  const [activeMemo, setActiveMemo] = useState(null);
+  const [summonTicker, setSummonTicker] = useState('HPG');
+  const [summonBook, setSummonBook] = useState('CORE');
+  const [summonLoading, setSummonLoading] = useState(false);
+  const [committeeActionLoading, setCommitteeActionLoading] = useState(false);
+
   // Modals
   const [showFillModal, setShowFillModal] = useState(false);
   const [selectedReportUrl, setSelectedReportUrl] = useState(null);
@@ -37,6 +48,7 @@ export default function App() {
     volume: 1000,
     price: 28.5,
     trade_date: new Date().toISOString().split('T')[0],
+    strategy_book: 'QUANT',
     notes: 'Nhập từ Web Dashboard'
   });
 
@@ -44,7 +56,7 @@ export default function App() {
     try {
       setLoading(true);
       const accParam = acc && acc !== 'ALL' ? `?account=${acc}` : '';
-      const [navRes, histRes, pfRes, ordRes, repRes, mlInfoRes, mlRankRes, accRes, capRes] = await Promise.all([
+      const [navRes, histRes, pfRes, ordRes, repRes, mlInfoRes, mlRankRes, accRes, capRes, commRes] = await Promise.all([
         fetch('/api/nav/summary').then(r => r.json()),
         fetch('/api/nav/history').then(r => r.json()),
         fetch('/api/portfolio' + accParam).then(r => r.json()),
@@ -53,7 +65,8 @@ export default function App() {
         fetch('/api/ml/model/info').then(r => r.json()).catch(() => null),
         fetch('/api/ml/rankings?top_n=10').then(r => r.json()).catch(() => ({ rankings: [] })),
         fetch('/api/accounts').then(r => r.json()).catch(() => []),
-        fetch('/api/capital/summary' + accParam).then(r => r.json()).catch(() => null)
+        fetch('/api/capital/summary' + accParam).then(r => r.json()).catch(() => null),
+        fetch('/api/committee/memos').then(r => r.json()).catch(() => ({ memos: [], agents: [] }))
       ]);
 
       setNavSummary(navRes);
@@ -65,6 +78,13 @@ export default function App() {
       setCapitalSummary(capRes);
       if (mlInfoRes) setMlModelInfo(mlInfoRes);
       if (mlRankRes) setMlRankings(mlRankRes.rankings || []);
+      if (commRes) {
+        setCommitteeMemos(commRes.memos || []);
+        setAgentsTelemetry(commRes.agents || []);
+        if (commRes.memos && commRes.memos.length > 0) {
+          setActiveMemo(prev => prev || commRes.memos[0]);
+        }
+      }
     } catch (err) {
       console.error('Lỗi tải dữ liệu API:', err);
     } finally {
@@ -189,6 +209,7 @@ export default function App() {
           volume: Number(fillForm.volume),
           price: Number(fillForm.price),
           trade_date: fillForm.trade_date,
+          strategy_book: fillForm.strategy_book || 'QUANT',
           notes: fillForm.notes
         })
       });
@@ -202,6 +223,61 @@ export default function App() {
       }
     } catch (err) {
       alert('Lỗi gửi lệnh: ' + err);
+    }
+  };
+
+  const handleSummonCommittee = async (e) => {
+    if (e) e.preventDefault();
+    if (!summonTicker) return;
+    try {
+      setSummonLoading(true);
+      const res = await fetch(`/api/committee/debate/${summonTicker.trim().toUpperCase()}?book=${summonBook}`, {
+        method: 'POST'
+      }).then(r => r.json());
+      if (res.status === 'SUCCESS' && res.memo) {
+        setActiveMemo(res.memo);
+        await fetchData();
+      } else {
+        alert(res.detail || 'Không thể triệu tập phiên họp Ủy ban');
+      }
+    } catch (err) {
+      alert('Lỗi kết nối khi triệu tập họp: ' + err.message);
+    } finally {
+      setSummonLoading(false);
+    }
+  };
+
+  const handleApproveMemo = async (memoId) => {
+    try {
+      setCommitteeActionLoading(true);
+      const res = await fetch(`/api/committee/memos/${memoId}/approve`, {
+        method: 'POST'
+      }).then(r => r.json());
+      if (res.status === 'SUCCESS') {
+        setActiveMemo(prev => prev && prev.memo_id === memoId ? { ...prev, status: 'APPROVED' } : prev);
+        await fetchData();
+      }
+    } catch (err) {
+      alert('Lỗi phê duyệt: ' + err.message);
+    } finally {
+      setCommitteeActionLoading(false);
+    }
+  };
+
+  const handleRejectMemo = async (memoId) => {
+    try {
+      setCommitteeActionLoading(true);
+      const res = await fetch(`/api/committee/memos/${memoId}/reject`, {
+        method: 'POST'
+      }).then(r => r.json());
+      if (res.status === 'SUCCESS') {
+        setActiveMemo(prev => prev && prev.memo_id === memoId ? { ...prev, status: 'REJECTED' } : prev);
+        await fetchData();
+      }
+    } catch (err) {
+      alert('Lỗi bác bỏ: ' + err.message);
+    } finally {
+      setCommitteeActionLoading(false);
     }
   };
 
@@ -407,6 +483,21 @@ export default function App() {
               AI Alpha
             </span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('committee')}
+            className={`px-4 py-2.5 text-sm font-medium transition cursor-pointer border-b-2 flex items-center space-x-2 ${
+              activeTab === 'committee' 
+                ? 'border-indigo-500 text-indigo-400' 
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-indigo-400" />
+            <span>Ủy Ban Đầu Tư AI (Live Committee)</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 font-mono font-bold">
+              {committeeMemos.length > 0 ? committeeMemos.length : 'Live'}
+            </span>
+          </button>
         </div>
 
         {/* TAB 1: PORTFOLIO & ORDERS */}
@@ -418,41 +509,65 @@ export default function App() {
               <div className="px-6 py-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h2 className="text-base font-bold text-white">Vị Thế Đang Nắm Giữ (Holdings)</h2>
-                  <p className="text-xs text-slate-400">Danh mục tài sản thực tế theo 4 tài khoản CTCK</p>
+                  <p className="text-xs text-slate-400">Danh mục tài sản thực tế theo Sổ Core / Quant và 4 tài khoản CTCK</p>
                 </div>
                 
-                {/* Account Filter Pills */}
-                <div className="flex items-center space-x-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800 text-xs">
-                  <button
-                    onClick={() => { setSelectedAccount('ALL'); fetchData('ALL'); }}
-                    className={`px-2.5 py-1 rounded-lg transition font-medium ${selectedAccount === 'ALL' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'}`}
-                  >
-                    Tất cả ({portfolio.length})
-                  </button>
-                  <button
-                    onClick={() => { setSelectedAccount('0001716319'); fetchData('0001716319'); }}
-                    className={`px-2.5 py-1 rounded-lg transition font-medium ${selectedAccount === '0001716319' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'}`}
-                  >
-                    0001716319 (Hiện hành)
-                  </button>
-                  <button
-                    onClick={() => { setSelectedAccount('009C105992'); fetchData('009C105992'); }}
-                    className={`px-2.5 py-1 rounded-lg transition font-medium ${selectedAccount === '009C105992' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'}`}
-                  >
-                    009C105992
-                  </button>
-                  <button
-                    onClick={() => { setSelectedAccount('127008'); fetchData('127008'); }}
-                    className={`px-2.5 py-1 rounded-lg transition font-medium ${selectedAccount === '127008' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'}`}
-                  >
-                    127008
-                  </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Strategy Book Filter Pills */}
+                  <div className="flex items-center space-x-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs">
+                    <button
+                      onClick={() => setSelectedBook('ALL')}
+                      className={`px-2.5 py-1 rounded-lg transition font-medium cursor-pointer ${selectedBook === 'ALL' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      Tất cả Sổ
+                    </button>
+                    <button
+                      onClick={() => setSelectedBook('CORE')}
+                      className={`px-2.5 py-1 rounded-lg transition font-medium cursor-pointer ${selectedBook === 'CORE' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30 font-bold' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      📘 CORE (Fundamental)
+                    </button>
+                    <button
+                      onClick={() => setSelectedBook('QUANT')}
+                      className={`px-2.5 py-1 rounded-lg transition font-medium cursor-pointer ${selectedBook === 'QUANT' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30 font-bold' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      ⚡ QUANT (Trading)
+                    </button>
+                  </div>
+
+                  {/* Account Filter Pills */}
+                  <div className="flex items-center space-x-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800 text-xs">
+                    <button
+                      onClick={() => { setSelectedAccount('ALL'); fetchData('ALL'); }}
+                      className={`px-2.5 py-1 rounded-lg transition font-medium ${selectedAccount === 'ALL' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      Tất cả ({portfolio.length})
+                    </button>
+                    <button
+                      onClick={() => { setSelectedAccount('0001716319'); fetchData('0001716319'); }}
+                      className={`px-2.5 py-1 rounded-lg transition font-medium ${selectedAccount === '0001716319' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      0001716319
+                    </button>
+                    <button
+                      onClick={() => { setSelectedAccount('009C105992'); fetchData('009C105992'); }}
+                      className={`px-2.5 py-1 rounded-lg transition font-medium ${selectedAccount === '009C105992' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      009C105992
+                    </button>
+                    <button
+                      onClick={() => { setSelectedAccount('127008'); fetchData('127008'); }}
+                      className={`px-2.5 py-1 rounded-lg transition font-medium ${selectedAccount === '127008' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      127008
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {portfolio.filter(p => selectedAccount === 'ALL' || p.account === selectedAccount).length === 0 ? (
+              {portfolio.filter(p => (selectedAccount === 'ALL' || p.account === selectedAccount) && (selectedBook === 'ALL' || (p.strategy_book || 'QUANT') === selectedBook)).length === 0 ? (
                 <div className="p-8 text-center text-slate-500 text-sm">
-                  📭 Tài khoản này đang giữ 100% Tiền mặt. Chưa có vị thế cổ phiếu nào mở.
+                  📭 Không có vị thế cổ phiếu nào phù hợp với bộ lọc đã chọn.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -460,6 +575,7 @@ export default function App() {
                     <thead className="bg-slate-950/50 text-slate-400 text-xs uppercase font-semibold border-b border-slate-800">
                       <tr>
                         <th className="px-6 py-3.5">Mã CP</th>
+                        <th className="px-6 py-3.5">Sổ</th>
                         <th className="px-6 py-3.5">Tài khoản</th>
                         <th className="px-6 py-3.5">Khối lượng</th>
                         <th className="px-6 py-3.5">Giá vốn</th>
@@ -471,9 +587,9 @@ export default function App() {
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
                       {portfolio
-                        .filter(p => selectedAccount === 'ALL' || p.account === selectedAccount)
+                        .filter(p => (selectedAccount === 'ALL' || p.account === selectedAccount) && (selectedBook === 'ALL' || (p.strategy_book || 'QUANT') === selectedBook))
                         .map((item) => (
-                        <tr key={`${item.account}-${item.ticker}`} className="hover:bg-slate-800/30 transition">
+                        <tr key={`${item.account}-${item.ticker}-${item.strategy_book || 'QUANT'}`} className="hover:bg-slate-800/30 transition">
                           <td className="px-6 py-4 font-bold text-emerald-400 flex items-center space-x-2">
                             <span>{item.ticker}</span>
                             {item.ticker === 'FLC' && (
@@ -481,6 +597,15 @@ export default function App() {
                                 Treo sàn (0 đ)
                               </span>
                             )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
+                              item.strategy_book === 'CORE'
+                                ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                            }`}>
+                              {item.strategy_book || 'QUANT'}
+                            </span>
                           </td>
                           <td className="px-6 py-4">
                             <span className="text-xs px-2 py-0.5 rounded font-mono bg-slate-800/80 text-slate-300 border border-slate-700/60">
@@ -520,7 +645,7 @@ export default function App() {
               <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-bold text-white">Sổ Lệnh & Trạng Thái Khớp (Order Book)</h2>
-                  <p className="text-xs text-slate-400">Lịch sử các đề xuất và xác nhận khớp thực tế</p>
+                  <p className="text-xs text-slate-400">Lịch sử các đề xuất và xác nhận khớp thực tế kèm Sổ chiến lược</p>
                 </div>
               </div>
 
@@ -530,6 +655,7 @@ export default function App() {
                     <tr>
                       <th className="px-6 py-3.5">Mã Lệnh</th>
                       <th className="px-6 py-3.5">Lệnh</th>
+                      <th className="px-6 py-3.5">Sổ</th>
                       <th className="px-6 py-3.5">Đề Xuất (AI)</th>
                       <th className="px-6 py-3.5">Khớp Thực Tế</th>
                       <th className="px-6 py-3.5">Trượt Giá</th>
@@ -544,6 +670,13 @@ export default function App() {
                         <td className="px-6 py-3.5">
                           <span className={`px-2 py-0.5 rounded font-bold ${ord.action === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
                             {ord.action} {ord.ticker}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3.5">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            ord.strategy_book === 'CORE' ? 'bg-blue-500/20 text-blue-300' : 'bg-purple-500/20 text-purple-300'
+                          }`}>
+                            {ord.strategy_book || 'QUANT'}
                           </span>
                         </td>
                         <td className="px-6 py-3.5">
@@ -982,6 +1115,477 @@ export default function App() {
           </div>
         )}
 
+        {/* ========================================================= */}
+        {/* TAB 5: ỦY BAN ĐẦU TƯ AI (LIVE INVESTMENT COMMITTEE)       */}
+        {/* ========================================================= */}
+        {activeTab === 'committee' && (
+          <div className="space-y-6">
+            
+            {/* 5.1 HEADER & FAST SUMMON FORM */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center space-x-3">
+                  <div className="p-2.5 bg-gradient-to-tr from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl text-amber-400">
+                    <Scale className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white flex items-center space-x-2">
+                      <span>Ủy Ban Đầu Tư Trực Tuyến</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 animate-pulse">
+                        LIVE TELEMETRY
+                      </span>
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Mô phỏng 6 AI Agents đa nhiệm tranh biện 2 chiều, phản biện bẫy rủi ro và ra phán quyết trước khi CEO duyệt
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fast Summon Form */}
+              <form onSubmit={handleSummonCommittee} className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={summonTicker}
+                    onChange={e => setSummonTicker(e.target.value.toUpperCase())}
+                    placeholder="Mã CP (FPT, HPG...)"
+                    className="w-32 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono uppercase focus:border-amber-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div className="flex bg-slate-950 border border-slate-800 rounded-xl p-1">
+                  <button
+                    type="button"
+                    onClick={() => setSummonBook('CORE')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-lg transition cursor-pointer ${
+                      summonBook === 'CORE' 
+                        ? 'bg-blue-600 text-white shadow-sm' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    CORE (70%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSummonBook('QUANT')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-lg transition cursor-pointer ${
+                      summonBook === 'QUANT' 
+                        ? 'bg-purple-600 text-white shadow-sm' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    QUANT (30%)
+                  </button>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={summonLoading}
+                  className="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-amber-600/20 transition flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Gavel className={`w-4 h-4 ${summonLoading ? 'animate-spin' : ''}`} />
+                  <span>{summonLoading ? 'Đang Họp Tranh Biện...' : 'Triệu Tập Tranh Biện'}</span>
+                </button>
+              </form>
+            </div>
+
+            {/* 5.2 AGENT PIPELINE TOPOLOGY (Trạng Thái Trực Quan 7 Nhân Viên AI) */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center justify-between">
+                <span>Cấu Trúc Luồng Vận Hành Hội Đồng (Agent Pipeline Topology)</span>
+                <span className="text-slate-500">Mô hình Đa Tác Tử Không Tiêu Thụ Token (Zero-Token Architecture)</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                {[
+                  { id: 'macro', name: 'Macro Scout', role: 'Vĩ mô & Lãi suất', icon: Globe, color: 'text-sky-400', bg: 'bg-sky-500/10 border-sky-500/20' },
+                  { id: 'fa', name: 'FA Analyst', role: 'BCTC & Screener (0-Token)', icon: FileSpreadsheet, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+                  { id: 'quant', name: 'Quant / ML', role: 'Universal Alpha LightGBM', icon: Cpu, color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' },
+                  { id: 'bull', name: 'Bull Advocate', role: 'Phe Mua (Tăng trưởng)', icon: TrendingUp, color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/20' },
+                  { id: 'bear', name: 'Bear Red-Team', role: 'Phe Bán (Bẫy Kế toán)', icon: ShieldAlert, color: 'text-rose-400', bg: 'bg-rose-500/10 border-rose-500/20' },
+                  { id: 'cro', name: 'CRO Veto', role: 'Kiểm soát Rủi ro & Kelly', icon: Lock, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
+                  { id: 'cio', name: 'CIO Decision', role: 'Giám đốc Đầu tư Quỹ', icon: Award, color: 'text-indigo-400', bg: 'bg-indigo-500/10 border-indigo-500/20' }
+                ].map((agent) => (
+                  <div key={agent.id} className={`p-3 rounded-xl border ${agent.bg} flex flex-col justify-between space-y-2 relative overflow-hidden`}>
+                    <div className="flex items-center justify-between">
+                      <agent.icon className={`w-5 h-5 ${agent.color}`} />
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-slate-950/80 text-emerald-400 border border-emerald-500/30 flex items-center space-x-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>ONLINE</span>
+                      </span>
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-white leading-tight">{agent.name}</div>
+                      <div className="text-[10px] text-slate-400 truncate">{agent.role}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 5.3 PHIÊN HỌP HIỆN TẠI (ACTIVE MEMO TELEMETRY & DEBATE ARENA) */}
+            {activeMemo ? (
+              <div className="space-y-6">
+                
+                {/* Header Tờ Trình */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500/20 to-orange-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold font-mono text-lg">
+                        {activeMemo.ticker}
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <h3 className="text-lg font-bold text-white">Tờ Trình Phê Duyệt Đầu Tư: {activeMemo.ticker}</h3>
+                          <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border ${
+                            activeMemo.strategy_book === 'CORE'
+                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                              : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                          }`}>
+                            {activeMemo.strategy_book === 'CORE' ? 'SỔ CORE (Dài Hạn)' : 'SỔ QUANT (Ngắn Hạn)'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 font-mono mt-0.5">
+                          ID: {activeMemo.memo_id} • Thời gian: {activeMemo.created_at || 'Mới cập nhật'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Status & CEO Decision Buttons */}
+                    <div className="flex items-center space-x-3">
+                      <span className={`text-xs font-bold px-3 py-1.5 rounded-xl border ${
+                        activeMemo.status === 'APPROVED'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : activeMemo.status === 'REJECTED'
+                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                          : 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse'
+                      }`}>
+                        TRẠNG THÁI: {activeMemo.status || 'PROPOSED'}
+                      </span>
+
+                      {activeMemo.status !== 'APPROVED' && activeMemo.status !== 'REJECTED' && (
+                        <div className="flex space-x-2">
+                          <button
+                            type="button"
+                            disabled={committeeActionLoading}
+                            onClick={() => handleApproveMemo(activeMemo.memo_id)}
+                            className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition flex items-center space-x-1.5 cursor-pointer shadow-lg shadow-emerald-600/20"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            <span>Phê Duyệt Đề Xuất</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={committeeActionLoading}
+                            onClick={() => handleRejectMemo(activeMemo.memo_id)}
+                            className="px-4 py-1.5 bg-rose-600/80 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition flex items-center space-x-1.5 cursor-pointer"
+                          >
+                            <XCircle className="w-4 h-4" />
+                            <span>Bác Bỏ</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3 Thẻ Thông Tin Nền Tảng (Macro, FA, Quant/ML) */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                    {/* Macro Scout Card */}
+                    <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+                      <div className="flex items-center space-x-2 text-sky-400 text-xs font-bold">
+                        <Globe className="w-4 h-4" />
+                        <span>1. Macro Scout (Góc Nhìn Vĩ Mô)</span>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        {typeof activeMemo.macro_view === 'object' && activeMemo.macro_view !== null
+                          ? activeMemo.macro_view.headline || JSON.stringify(activeMemo.macro_view)
+                          : activeMemo.macro_view || 'Vĩ mô ổn định, chính sách tiền tệ hỗ trợ dòng vốn.'}
+                      </p>
+                    </div>
+
+                    {/* FA Analyst Card */}
+                    <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+                      <div className="flex items-center space-x-2 text-emerald-400 text-xs font-bold">
+                        <FileSpreadsheet className="w-4 h-4" />
+                        <span>2. FA Analyst (Chấm Điểm 0-Token)</span>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-relaxed font-mono">
+                        {typeof activeMemo.fa_summary === 'object' && activeMemo.fa_summary !== null
+                          ? `FA Score: ${activeMemo.fa_summary.score || 'N/A'}/100 | P/E: ${activeMemo.fa_summary.pe || 'N/A'} | ROE: ${activeMemo.fa_summary.roe ? (activeMemo.fa_summary.roe * 100).toFixed(1) + '%' : 'N/A'}`
+                          : activeMemo.fa_summary || 'Chỉ số cơ bản đạt yêu cầu sàng lọc.'}
+                      </p>
+                    </div>
+
+                    {/* Quant/ML Card */}
+                    <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+                      <div className="flex items-center space-x-2 text-purple-400 text-xs font-bold">
+                        <Cpu className="w-4 h-4" />
+                        <span>3. Quant / Universal Alpha (ML)</span>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-relaxed font-mono">
+                        {typeof activeMemo.ta_ml_summary === 'object' && activeMemo.ta_ml_summary !== null
+                          ? `Alpha Score: ${activeMemo.ta_ml_summary.ml_score || 'N/A'} | ATR: ${activeMemo.ta_ml_summary.atr_14 || 'N/A'}`
+                          : activeMemo.ta_ml_summary || 'Mô hình ML xác nhận tín hiệu động lượng tích cực.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* PHÒNG TRANH BIỆN 2 CỘT (BULL VS. BEAR DEBATE ARENA) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* CỘT 1: PHE BÒ (BULL ADVOCATE) */}
+                  <div className="bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-6 shadow-xl space-y-4 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                    <div className="flex items-center justify-between border-b border-emerald-500/20 pb-3">
+                      <div className="flex items-center space-x-2 text-emerald-400 font-bold">
+                        <TrendingUp className="w-5 h-5" />
+                        <span>PHE BÒ (BULL ADVOCATE)</span>
+                      </div>
+                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        MỤC TIÊU: {activeMemo.target_price ? Number(activeMemo.target_price).toLocaleString() + ' đ' : 'Chưa đặt'}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-300 space-y-2">
+                      <div className="font-semibold text-emerald-300 text-xs uppercase tracking-wide">
+                        Các Luận Điểm Đột Phá & Động Lực Tăng Giá:
+                      </div>
+                      <div className="bg-slate-950/70 rounded-xl p-4 border border-emerald-500/10 leading-relaxed space-y-2">
+                        {(() => {
+                          const args = activeMemo.bull_arguments;
+                          if (!args) return <div>Không có ghi chú.</div>;
+                          if (Array.isArray(args)) {
+                            return <ul className="space-y-1.5 list-disc list-inside">{args.map((a, i) => <li key={i}>{a}</li>)}</ul>;
+                          }
+                          const lines = String(args).split('\n').filter(l => l.trim().length > 0);
+                          return (
+                            <ul className="space-y-2">
+                              {lines.map((l, i) => (
+                                <li key={i} className="flex items-start space-x-2">
+                                  <span className="text-emerald-400 font-bold">✓</span>
+                                  <span>{l.replace(/^[-*•\d.]+\s*/, '')}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CỘT 2: PHE GẤU (BEAR RED-TEAM) */}
+                  <div className="bg-slate-900/90 border border-rose-500/30 rounded-2xl p-6 shadow-xl space-y-4 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                    <div className="flex items-center justify-between border-b border-rose-500/20 pb-3">
+                      <div className="flex items-center space-x-2 text-rose-400 font-bold">
+                        <ShieldAlert className="w-5 h-5" />
+                        <span>PHE GẤU (BEAR RED-TEAM)</span>
+                      </div>
+                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                        CẮT LỖ: {activeMemo.stop_loss_price ? Number(activeMemo.stop_loss_price).toLocaleString() + ' đ' : 'Chưa đặt'}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-300 space-y-2">
+                      <div className="font-semibold text-rose-300 text-xs uppercase tracking-wide">
+                        Phản Biện Bẫy Định Giá & Cảnh Báo BCTC:
+                      </div>
+                      <div className="bg-slate-950/70 rounded-xl p-4 border border-rose-500/10 leading-relaxed space-y-2">
+                        {(() => {
+                          const args = activeMemo.bear_arguments;
+                          if (!args) return <div>Không có cảnh báo rủi ro đặc biệt.</div>;
+                          if (Array.isArray(args)) {
+                            return <ul className="space-y-1.5 list-disc list-inside">{args.map((a, i) => <li key={i}>{a}</li>)}</ul>;
+                          }
+                          const lines = String(args).split('\n').filter(l => l.trim().length > 0);
+                          return (
+                            <ul className="space-y-2">
+                              {lines.map((l, i) => (
+                                <li key={i} className="flex items-start space-x-2">
+                                  <span className="text-rose-400 font-bold">⚠</span>
+                                  <span>{l.replace(/^[-*•\d.]+\s*/, '')}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* PHÁN QUYẾT CRO & CIO */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* CRO Card */}
+                  <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-5 shadow-xl space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <div className="flex items-center space-x-2 text-amber-400 font-bold text-sm">
+                        <Lock className="w-4 h-4" />
+                        <span>Phán Quyết Quản Trị Rủi Ro (CRO Verdict)</span>
+                      </div>
+                      <span className="text-xs px-2 py-0.5 rounded font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        {typeof activeMemo.cro_verdict === 'object' && activeMemo.cro_verdict !== null
+                          ? activeMemo.cro_verdict.decision || 'APPROVED'
+                          : activeMemo.cro_verdict || 'APPROVED'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-300 space-y-2">
+                      <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                        <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+                          <span className="text-slate-500 block text-[10px]">TỶ TRỌNG TỐI ĐA</span>
+                          <span className="text-amber-400 font-bold text-sm">
+                            {activeMemo.cro_position_size 
+                              ? (Number(activeMemo.cro_position_size) * 100).toFixed(1) + '% NAV' 
+                              : (activeMemo.strategy_book === 'CORE' ? '25.0% NAV' : '15.0% NAV')}
+                          </span>
+                        </div>
+                        <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+                          <span className="text-slate-500 block text-[10px]">KHỐI LƯỢNG ĐỀ XUẤT</span>
+                          <span className="text-white font-bold text-sm">
+                            {Number(activeMemo.target_volume || 0).toLocaleString()} CP
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-400 italic">
+                        {activeMemo.strategy_book === 'CORE'
+                          ? 'Sổ CORE áp dụng Hard Stop-Loss 15%, Max Position 25% NAV và kiểm toán Red Flags BCTC nghiêm ngặt.'
+                          : 'Sổ QUANT áp dụng Hard Stop-Loss 7%, Max Position 15% NAV và cắt lỗ dứt khoát theo ATR.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* CIO Card */}
+                  <div className="bg-slate-900 border border-indigo-500/30 rounded-2xl p-5 shadow-xl space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <div className="flex items-center space-x-2 text-indigo-400 font-bold text-sm">
+                        <Award className="w-4 h-4" />
+                        <span>Quyết Định Giám Đốc Đầu Tư (CIO Decision)</span>
+                      </div>
+                      <span className="text-xs px-2 py-0.5 rounded font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                        {activeMemo.action || 'BUY'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-300 space-y-2">
+                      <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 leading-relaxed font-mono">
+                        {typeof activeMemo.cio_decision === 'object' && activeMemo.cio_decision !== null
+                          ? activeMemo.cio_decision.rationale || JSON.stringify(activeMemo.cio_decision)
+                          : activeMemo.cio_decision || 'Đề xuất giải ngân cổ phiếu theo tỷ trọng đã được CRO thông qua.'}
+                      </div>
+                      <div className="text-[11px] text-slate-400 flex items-center justify-between">
+                        <span>Hành động: <strong className="text-white">{activeMemo.action || 'BUY'}</strong></span>
+                        <span>Mục tiêu: <strong className="text-emerald-400">{Number(activeMemo.target_price || 0).toLocaleString()} đ</strong></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            ) : (
+              <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-500 space-y-3">
+                <Scale className="w-10 h-10 mx-auto text-slate-600" />
+                <p>Chưa có biên bản họp nào được chọn hoặc đang tải dữ liệu.</p>
+                <p className="text-xs text-slate-600">Nhập mã CP ở trên và bấm "Triệu Tập Tranh Biện" để triệu tập Ủy Ban Đầu Tư ngay lập tức.</p>
+              </div>
+            )}
+
+            {/* 5.4 DANH SÁCH CÁC TỜ TRÌNH ĐÃ GHI NHẬN (HISTORICAL COMMITTEE MEMOS) */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white flex items-center space-x-2">
+                  <FileText className="w-4 h-4 text-amber-400" />
+                  <span>Lịch Sử Các Tờ Trình Ủy Ban Đầu Tư ({committeeMemos.length})</span>
+                </h3>
+                <span className="text-xs text-slate-500">Được lưu vết bảo mật trong database SQLite</span>
+              </div>
+
+              {committeeMemos.length === 0 ? (
+                <div className="text-xs text-slate-500 py-4 text-center">Chưa có tờ trình nào được ghi nhận.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400">
+                        <th className="py-2.5 px-3">Thời Gian</th>
+                        <th className="py-2.5 px-3">Mã CP</th>
+                        <th className="py-2.5 px-3">Sổ Chiến Lược</th>
+                        <th className="py-2.5 px-3">Lệnh</th>
+                        <th className="py-2.5 px-3 text-right">Khối Lượng</th>
+                        <th className="py-2.5 px-3 text-right">Giá Mục Tiêu</th>
+                        <th className="py-2.5 px-3">Phán Quyết CRO</th>
+                        <th className="py-2.5 px-3 text-center">Trạng Thái</th>
+                        <th className="py-2.5 px-3 text-right">Thao Tác</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-mono">
+                      {committeeMemos.map((memo) => (
+                        <tr 
+                          key={memo.memo_id}
+                          className={`hover:bg-slate-800/40 transition cursor-pointer ${
+                            activeMemo && activeMemo.memo_id === memo.memo_id ? 'bg-amber-500/5' : ''
+                          }`}
+                          onClick={() => setActiveMemo(memo)}
+                        >
+                          <td className="py-2.5 px-3 text-slate-400 text-[11px]">
+                            {memo.created_at ? memo.created_at.split(' ')[0] : 'N/A'}
+                          </td>
+                          <td className="py-2.5 px-3 font-bold text-white">{memo.ticker}</td>
+                          <td className="py-2.5 px-3">
+                            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold border ${
+                              memo.strategy_book === 'CORE'
+                                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                            }`}>
+                              {memo.strategy_book || 'QUANT'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-emerald-400 font-bold">{memo.action || 'BUY'}</td>
+                          <td className="py-2.5 px-3 text-right text-slate-200">
+                            {Number(memo.target_volume || 0).toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-slate-200">
+                            {Number(memo.target_price || 0).toLocaleString()} đ
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className="text-[10px] text-amber-400">
+                              {typeof memo.cro_verdict === 'object' && memo.cro_verdict !== null 
+                                ? memo.cro_verdict.decision || 'APPROVED' 
+                                : memo.cro_verdict || 'APPROVED'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                              memo.status === 'APPROVED'
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                : memo.status === 'REJECTED'
+                                ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                            }`}>
+                              {memo.status || 'PROPOSED'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setActiveMemo(memo); }}
+                              className="text-[11px] text-amber-400 hover:text-amber-300 underline font-sans cursor-pointer"
+                            >
+                              Xem Chi Tiết
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
+
       </main>
 
       {/* MODAL 1: NHẬP LỆNH KHỚP THỰC TẾ (/fill) */}
@@ -1046,14 +1650,27 @@ export default function App() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs text-slate-400 block mb-1">Ngày Giao Dịch</label>
-                <input
-                  type="date"
-                  value={fillForm.trade_date}
-                  onChange={e => setFillForm({...fillForm, trade_date: e.target.value})}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-emerald-500 focus:outline-none"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Sổ Chiến Lược</label>
+                  <select
+                    value={fillForm.strategy_book || 'QUANT'}
+                    onChange={e => setFillForm({...fillForm, strategy_book: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                  >
+                    <option value="QUANT">QUANT (Trading Ngắn)</option>
+                    <option value="CORE">CORE (Fundamental)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Ngày Giao Dịch</label>
+                  <input
+                    type="date"
+                    value={fillForm.trade_date}
+                    onChange={e => setFillForm({...fillForm, trade_date: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
               </div>
 
               <div className="pt-3 flex space-x-3">

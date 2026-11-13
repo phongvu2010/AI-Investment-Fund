@@ -56,6 +56,7 @@ class FillOrderRequest(BaseModel):
     price: float
     volume: int
     trade_date: Optional[str] = None
+    strategy_book: Optional[str] = "QUANT"
     notes: Optional[str] = "Nhập lệnh từ Web Dashboard"
 
 class CloseNavRequest(BaseModel):
@@ -95,9 +96,9 @@ def get_nav_history(limit: int = 90):
     return db.get_nav_history(limit=limit)
 
 @app.get("/api/portfolio")
-def get_portfolio(account: Optional[str] = None):
-    """Lấy danh mục cổ phiếu đang nắm giữ kèm lãi/lỗ và tỷ trọng (toàn quỹ hoặc theo tài khoản)"""
-    return db.get_portfolio(account=account)
+def get_portfolio(account: Optional[str] = None, book: Optional[str] = None):
+    """Lấy danh mục cổ phiếu đang nắm giữ kèm lãi/lỗ và tỷ trọng (toàn quỹ hoặc theo tài khoản, sổ chiến lược)"""
+    return db.get_portfolio(account=account, strategy_book=book)
 
 @app.get("/api/accounts")
 def get_broker_accounts():
@@ -111,10 +112,10 @@ def get_recent_transactions(account: Optional[str] = None, limit: int = 100):
 
 @app.get("/api/orders")
 def get_orders(limit: int = 50):
-    """Lấy danh sách sổ lệnh mua/bán và trạng thái khớp"""
+    """Lấy danh sách sổ lệnh mua/bán và trạng thái khớp kèm sổ chiến lược"""
     with db.get_connection() as conn:
         rows = conn.execute("""
-            SELECT order_id, ticker, action, order_type, proposed_price, proposed_volume,
+            SELECT order_id, account, ticker, strategy_book, action, order_type, proposed_price, proposed_volume,
                    executed_price, executed_volume, status, fee, tax, slippage_pct,
                    trade_date, created_at, executed_at, notes
             FROM order_history
@@ -158,11 +159,62 @@ def submit_fill_order(req: FillOrderRequest):
             executed_price=req.price,
             executed_volume=req.volume,
             trade_date=req.trade_date,
-            notes=req.notes
+            notes=req.notes,
+            strategy_book=req.strategy_book or "QUANT"
         )
-        return {"status": "SUCCESS", "order_id": order_id, "message": f"Đã ghi nhận khớp {req.ticker}"}
+        return {"status": "SUCCESS", "order_id": order_id, "message": f"Đã ghi nhận khớp {req.ticker} ({req.strategy_book})"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+# ==========================================
+# CÁC ENDPOINTS ỦY BAN ĐẦU TƯ AI (LIVE INVESTMENT COMMITTEE)
+# ==========================================
+@app.get("/api/committee/memos")
+def get_committee_memos(limit: int = 20):
+    """Lấy danh sách các phiên tranh biện và trạng thái hoạt động của từng Agent"""
+    memos = db.get_decision_memos(limit=limit)
+    agents_telemetry = [
+        {"id": "macro", "name": "Macro Scout", "role": "Vĩ mô & Khí tượng sàn", "status": "ACTIVE", "icon": "Globe"},
+        {"id": "fa", "name": "FA Analyst", "role": "BCTC & Chấm điểm FA (0 Token)", "status": "ACTIVE", "icon": "FileSpreadsheet"},
+        {"id": "quant", "name": "Quant / ML", "role": "Universal Alpha Predictor (LightGBM)", "status": "ACTIVE", "icon": "Cpu"},
+        {"id": "bull", "name": "Bull Advocate", "role": "Phe Bò (Luận điểm tăng trưởng)", "status": "ACTIVE", "icon": "TrendingUp"},
+        {"id": "bear", "name": "Bear Red-Team", "role": "Phe Gấu (Bẫy rủi ro & Red Flags)", "status": "ACTIVE", "icon": "ShieldAlert"},
+        {"id": "cro", "name": "CRO Veto", "role": "Giám đốc Quản trị Rủi ro", "status": "ACTIVE", "icon": "Lock"},
+        {"id": "cio", "name": "CIO Decision", "role": "Giám đốc Đầu tư Quỹ", "status": "ACTIVE", "icon": "Award"}
+    ]
+    return {
+        "status": "SUCCESS",
+        "agents": agents_telemetry,
+        "memos": memos
+    }
+
+@app.post("/api/committee/debate/{ticker}")
+def trigger_committee_debate(ticker: str, book: str = "QUANT"):
+    """CEO triệu tập cuộc họp Ủy ban Đầu tư cho bất kỳ mã cổ phiếu nào"""
+    try:
+        from main import run_workflow_debate
+        memo = run_workflow_debate(ticker=ticker.upper(), strategy_book=book.upper())
+        if not memo:
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy dữ liệu giá cho mã {ticker.upper()}")
+        return {"status": "SUCCESS", "memo": memo}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/committee/memos/{memo_id}/approve")
+def approve_committee_memo(memo_id: str):
+    """CEO phê duyệt đề xuất đầu tư trực tiếp trên Web Dashboard"""
+    success = db.update_memo_status(memo_id=memo_id, status="APPROVED")
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy tờ trình {memo_id}")
+    return {"status": "SUCCESS", "message": f"Đã phê duyệt đề xuất {memo_id}", "memo_id": memo_id, "status": "APPROVED"}
+
+@app.post("/api/committee/memos/{memo_id}/reject")
+def reject_committee_memo(memo_id: str):
+    """CEO bác bỏ đề xuất đầu tư trực tiếp trên Web Dashboard"""
+    success = db.update_memo_status(memo_id=memo_id, status="REJECTED")
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy tờ trình {memo_id}")
+    return {"status": "SUCCESS", "message": f"Đã bác bỏ đề xuất {memo_id}", "memo_id": memo_id, "status": "REJECTED"}
 
 @app.post("/api/nav/close")
 def trigger_close_nav(req: CloseNavRequest):

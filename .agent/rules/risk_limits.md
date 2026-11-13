@@ -2,22 +2,29 @@
 
 ---
 
-## 1. CÁC QUY TẮC THÉP BẤT KHẢ XÂM PHẠM (HARD RULES)
+## 1. CÁC QUY TẮC THÉP BẤT KHẢ XÂM PHẠM (HARD RULES) - KIẾN TRÚC CORE-SATELLITE (DUAL-BOOK)
 
-1. **[HARD RULE 1] Hạn Mức Phân Bổ Vốn Đơn Lẻ (Position Sizing):**
-   * Không bao giờ giải ngân quá **20.0% tổng NAV** của Quỹ vào một mã cổ phiếu duy nhất tại bất kỳ thời điểm nào.
-   * Danh mục phải duy trì tối thiểu từ 3 đến 6 mã cổ phiếu thuộc các nhóm ngành khác nhau để phân tán rủi ro.
+Hệ thống phân tách thành 2 Sổ cái độc lập với khẩu vị rủi ro và triết lý đầu tư riêng biệt:
 
-2. **[HARD RULE 2] Kỷ Luật Cắt Lỗ Cứng (Hard Stop-Loss):**
-   * Mọi vị thế mở mới **bắt buộc** phải có ngưỡng Stop-Loss xác định trước.
-   * Ngưỡng cắt lỗ tối đa cho phép là **-7.0%** so với giá vốn bình quân.
-   * **CẤM TUYỆT ĐỐI:** Không bao giờ được phép nới lỏng hoặc dời ngưỡng Stop-loss ra xa hơn khi cổ phiếu đang giảm giá. Khi chạm ngưỡng, bắt buộc kích hoạt cảnh báo bán ngay lập tức.
+### 1.1 Sổ Chiến Lược CORE (Fundamental Trung & Dài Hạn):
+* **Hạn mức tổng sổ (`CORE_MAX_ALLOCATION_PCT`):** Tối đa **70% tổng NAV** của Quỹ.
+* **Hạn mức vị thế đơn lẻ (`CORE_MAX_POSITION_PCT`):** Tối đa **25% tổng NAV** cho một mã cổ phiếu cơ bản.
+* **Ngưỡng Cắt lỗ cứng (`CORE_HARD_STOP_LOSS_PCT`):** Khóa cứng ở mức **-15.0%** so với giá vốn bình quân (cho phép chịu đựng biến động chu kỳ và kiểm định nền).
 
-3. **[HARD RULE 3] Ngắt Mạch Tự Động Khi Thua Lỗ Tuần (Circuit Breaker):**
+### 1.2 Sổ Chiến Lược QUANT (Trading Ngắn Hạn & Xung Lượng):
+* **Hạn mức tổng sổ (`QUANT_MAX_ALLOCATION_PCT`):** Tối đa **30% tổng NAV** của Quỹ.
+* **Hạn mức vị thế đơn lẻ (`QUANT_MAX_POSITION_PCT`):** Tối đa **15% tổng NAV** cho một mã trading.
+* **Ngưỡng Cắt lỗ cứng (`QUANT_HARD_STOP_LOSS_PCT`):** Khóa cứng ở mức **-7.0%** so với giá vốn bình quân (bảo toàn vốn, chống kẹp hàng).
+
+---
+
+## 2. QUY TẮC RỦI RO TOÀN HỆ THỐNG
+
+1. **[HARD RULE 1] Ngắt Mạch Tự Động Khi Thua Lỗ Tuần (Circuit Breaker):**
    * Nếu NAV của Quỹ sụt giảm quá **5.0% trong vòng một tuần**, toàn bộ hoạt động mua mới lập tức bị **ĐÓNG BĂNG**.
    * Quỹ chỉ được phép quản lý và cơ cấu danh mục hiện tại, không được mở thêm vị thế mới cho đến khi hoàn thành buổi họp rà soát chiến lược.
 
-4. **[HARD RULE 4] Bộ Lọc Trạng Thái Thị Trường (Market Regime):**
+2. **[HARD RULE 2] Bộ Lọc Trạng Thái Thị Trường (Market Regime):**
    * Không giải ngân mua mới khi Macro Agent xác định thị trường đang trong trạng thái **Heavy Downtrend** (VN-Index nằm dưới MA50 và MA200 đang dốc xuống).
 
 ---

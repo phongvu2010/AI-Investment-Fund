@@ -46,7 +46,8 @@ def train_and_export_local_model(
         "vol_ratio_20", "vol_zscore_60",
         "norm_atr_14", "bb_width_20",
         "body_to_range", "upper_wick_ratio", "lower_wick_ratio",
-        "rsi_14", "macd_hist_norm"
+        "rsi_14", "macd_hist_norm",
+        "market_ret_20d", "market_breadth_ma20", "rel_vol_to_market"
     ]
     target = "target"
 

@@ -53,9 +53,17 @@ BROKER_FEE_RATE = float(os.getenv("BROKER_FEE_RATE", "0.0015"))  # Phí CTCK: 0.
 SELL_TAX_RATE = float(os.getenv("SELL_TAX_RATE", "0.0010"))       # Thuế TNCN: 0.10% chiều bán
 MARGIN_INTEREST_RATE = float(os.getenv("MARGIN_INTEREST_RATE", "0.12"))  # Lãi margin: 12%/năm
 
-# Quy tắc Kỷ luật Quỹ (Hard Rules)
-MAX_POSITION_PCT = float(os.getenv("MAX_POSITION_PCT", "0.20"))    # Tối đa 20% NAV / mã
-HARD_STOP_LOSS_PCT = float(os.getenv("HARD_STOP_LOSS_PCT", "0.07")) # Cắt lỗ cứng 7.0%
+# Quy tắc Kỷ luật Quỹ (Hard Rules) - Kiến trúc Core-Satellite (Dual-Book)
+CORE_MAX_ALLOCATION_PCT = float(os.getenv("CORE_MAX_ALLOCATION_PCT", "0.70"))  # Tổng sổ Core tối đa 70% NAV
+CORE_MAX_POSITION_PCT = float(os.getenv("CORE_MAX_POSITION_PCT", "0.25"))      # Vị thế Core tối đa 25% NAV / mã
+CORE_HARD_STOP_LOSS_PCT = float(os.getenv("CORE_HARD_STOP_LOSS_PCT", "0.15"))  # Cắt lỗ cứng Core: 15%
+
+QUANT_MAX_ALLOCATION_PCT = float(os.getenv("QUANT_MAX_ALLOCATION_PCT", "0.30")) # Tổng sổ Quant tối đa 30% NAV
+QUANT_MAX_POSITION_PCT = float(os.getenv("QUANT_MAX_POSITION_PCT", "0.15"))    # Vị thế Quant tối đa 15% NAV / mã
+QUANT_HARD_STOP_LOSS_PCT = float(os.getenv("QUANT_HARD_STOP_LOSS_PCT", "0.07")) # Cắt lỗ cứng Quant: 7%
+
+MAX_POSITION_PCT = float(os.getenv("MAX_POSITION_PCT", "0.20"))    # Fallback chung: 20% NAV / mã
+HARD_STOP_LOSS_PCT = float(os.getenv("HARD_STOP_LOSS_PCT", "0.07")) # Fallback chung: Cắt lỗ cứng 7.0%
 MAX_WEEKLY_DRAWDOWN_PCT = float(os.getenv("MAX_WEEKLY_DRAWDOWN_PCT", "0.05")) # MDD tuần tối đa 5%
 
 # ==========================================

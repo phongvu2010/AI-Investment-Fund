@@ -158,10 +158,18 @@ class FundTelegramBot:
             return
 
         ticker = args[0].upper()
+        strategy_book = "QUANT"
+        trade_date_str = date.today().strftime("%Y-%m-%d")
+
         try:
             volume = int(args[1].replace(",", "").replace(".", ""))
             price = float(args[2].replace(",", "."))
-            trade_date_str = args[3] if len(args) > 3 else date.today().strftime("%Y-%m-%d")
+            if len(args) > 3:
+                for extra in args[3:]:
+                    if extra.upper() in ("CORE", "QUANT"):
+                        strategy_book = extra.upper()
+                    elif re.match(r"^\d{4}-\d{2}-\d{2}$", extra):
+                        trade_date_str = extra
         except ValueError:
             await update.message.reply_text("❌ Lỗi: Khối lượng hoặc Giá không đúng định dạng số!")
             return
@@ -174,7 +182,8 @@ class FundTelegramBot:
                 executed_price=price,
                 executed_volume=volume,
                 trade_date=trade_date_str,
-                notes="Nhập bù qua lệnh /fill trên Telegram"
+                notes=f"Nhập bù qua lệnh /fill trên Telegram ({strategy_book})",
+                strategy_book=strategy_book
             )
 
             res_msg = (
@@ -182,6 +191,7 @@ class FundTelegramBot:
                 f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"• Mã lệnh: <code>{order_id}</code>\n"
                 f"• Cổ phiếu: <b>{ticker}</b>\n"
+                f"• Sổ chiến lược: <code>[{strategy_book}]</code>\n"
                 f"• Khối lượng: <code>{volume:,} CP</code>\n"
                 f"• Giá khớp: <code>{price:,.2f}</code>\n"
                 f"• Ngày giao dịch: <code>{trade_date_str}</code>\n\n"
@@ -278,19 +288,22 @@ class FundTelegramBot:
                 volume = int(vol_raw)
                 price = float(price_raw)
                 action = "SELL" if "bán" in text.lower() or "ban" in text.lower() else "BUY"
+                strategy_book = "CORE" if re.search(r"\bcore\b", text, re.IGNORECASE) else "QUANT"
 
                 order_id = self.db.record_retroactive_fill(
                     ticker=ticker,
                     action=action,
                     executed_price=price,
                     executed_volume=volume,
-                    notes=f"Nhận diện tự nhiên: '{text}'"
+                    notes=f"Nhận diện tự nhiên: '{text}' ({strategy_book})",
+                    strategy_book=strategy_book
                 )
 
                 reply = (
                     f"🤖 <b>AI ĐÃ HIỂU VÀ GHI NHẬN KHỚP LỆNH:</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"• Hành động: <b>{action} {ticker}</b>\n"
+                    f"• Sổ chiến lược: <code>[{strategy_book}]</code>\n"
                     f"• Khối lượng: <code>{volume:,} CP</code>\n"
                     f"• Giá thực tế: <code>{price:,.2f}</code>\n"
                     f"• Mã lệnh: <code>{order_id}</code>\n\n"
@@ -314,7 +327,8 @@ class FundTelegramBot:
         target_price: float,
         bull_points: str,
         bear_points: str,
-        nav_weight_pct: float
+        nav_weight_pct: float,
+        strategy_book: str = "QUANT"
     ):
         """Gửi Tờ trình đầu tư kèm 3 nút bấm tương tác"""
         if not self.app:
@@ -330,7 +344,8 @@ class FundTelegramBot:
             target_price=target_price,
             bull_points=bull_points,
             bear_points=bear_points,
-            nav_weight_pct=nav_weight_pct
+            nav_weight_pct=nav_weight_pct,
+            strategy_book=strategy_book
         )
 
         keyboard = [
