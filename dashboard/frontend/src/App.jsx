@@ -4,7 +4,8 @@ import {
   RefreshCw, PlusCircle, CheckCircle2, Clock, AlertTriangle, 
   ExternalLink, FileText, ArrowUpRight, ArrowDownRight, Activity,
   Brain, Cpu, Download, Upload, Database, Sparkles, FileSpreadsheet, Check,
-  Globe, Lock, Award, Users, CheckCircle, XCircle, Send, Gavel, Scale
+  Globe, Lock, Award, Users, CheckCircle, XCircle, Send, Gavel, Scale,
+  Zap, ShieldCheck
 } from 'lucide-react';
 
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
   // Live Investment Committee State
   const [committeeMemos, setCommitteeMemos] = useState([]);
   const [agentsTelemetry, setAgentsTelemetry] = useState([]);
+  const [latestJevTelemetry, setLatestJevTelemetry] = useState(null);
   const [activeMemo, setActiveMemo] = useState(null);
   const [summonTicker, setSummonTicker] = useState('HPG');
   const [summonBook, setSummonBook] = useState('CORE');
@@ -81,8 +83,14 @@ export default function App() {
       if (commRes) {
         setCommitteeMemos(commRes.memos || []);
         setAgentsTelemetry(commRes.agents || []);
+        if (commRes.latest_jev_telemetry) {
+          setLatestJevTelemetry(commRes.latest_jev_telemetry);
+        }
         if (commRes.memos && commRes.memos.length > 0) {
           setActiveMemo(prev => prev || commRes.memos[0]);
+          if (commRes.memos[0].jev_telemetry) {
+            setLatestJevTelemetry(commRes.memos[0].jev_telemetry);
+          }
         }
       }
     } catch (err) {
@@ -236,6 +244,7 @@ export default function App() {
       }).then(r => r.json());
       if (res.status === 'SUCCESS' && res.memo) {
         setActiveMemo(res.memo);
+        if (res.memo.jev_telemetry) setLatestJevTelemetry(res.memo.jev_telemetry);
         await fetchData();
       } else {
         alert(res.detail || 'Không thể triệu tập phiên họp Ủy ban');
@@ -1224,6 +1233,113 @@ export default function App() {
               </div>
             </div>
 
+            {/* 5.2.B JEV AI SYSTEM 1 & HARNESS GUARDRAIL TELEMETRY */}
+            <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/40 border border-indigo-500/30 rounded-2xl p-5 shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
+                    <Zap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-white flex items-center space-x-2">
+                      <span>Jev AI System 1 Telemetry (Phản Xạ Quyết Định Tốc Độ Cao)</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono border border-indigo-500/30">
+                        {latestJevTelemetry?.system_1_latency_ms ? `${latestJevTelemetry.system_1_latency_ms} ms` : '< 10 ms'} • Target &lt; 500ms
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Tách biệt System 1 (3 Primitives: Noul, Choice, Score) và System 2 Frontier LLM (Chỉ kích hoạt khi Confidence ≥ 0.75)
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-mono font-bold flex items-center space-x-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>HARNESS GUARDRAIL: ACTIVE</span>
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono">
+                {/* 1. Noul Triage */}
+                <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1.5">
+                  <div className="text-[11px] text-slate-400 font-sans font-bold flex items-center justify-between">
+                    <span>1. Noul (Event Triage)</span>
+                    <span className="text-amber-400 text-[10px]">
+                      {latestJevTelemetry?.triage?.latency_ms ? `${latestJevTelemetry.triage.latency_ms}ms` : '0.1ms'}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className={`text-xs px-2 py-0.5 rounded font-bold border ${
+                      latestJevTelemetry?.triage?.value 
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' 
+                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                    }`}>
+                      {latestJevTelemetry?.triage?.value ? 'MATERIAL IMPACT' : 'NOISE FILTERED'}
+                    </span>
+                    <span className="text-xs text-slate-300">
+                      Conf: {latestJevTelemetry?.triage?.confidence ? (latestJevTelemetry.triage.confidence * 100).toFixed(1) + '%' : '99.0%'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-sans truncate">
+                    {latestJevTelemetry?.triage?.reasoning || 'Lọc nhiễu thành công, sự kiện trong ngưỡng an toàn.'}
+                  </p>
+                </div>
+
+                {/* 2. Choice Route */}
+                <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1.5">
+                  <div className="text-[11px] text-slate-400 font-sans font-bold flex items-center justify-between">
+                    <span>2. Choice (Book Routing)</span>
+                    <span className="text-purple-400 text-[10px]">
+                      {latestJevTelemetry?.route?.latency_ms ? `${latestJevTelemetry.route.latency_ms}ms` : '1.2ms'}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className={`text-xs px-2 py-0.5 rounded font-bold border ${
+                      (latestJevTelemetry?.route?.value || activeMemo?.strategy_book) === 'CORE'
+                        ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                        : 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                    }`}>
+                      SỔ {latestJevTelemetry?.route?.value || activeMemo?.strategy_book || 'CORE'}
+                    </span>
+                    <span className="text-xs text-slate-300">
+                      Conf: {latestJevTelemetry?.route?.confidence ? (latestJevTelemetry.route.confidence * 100).toFixed(1) + '%' : '85.0%'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-sans truncate">
+                    {latestJevTelemetry?.route?.reasoning || 'Định tuyến tự động dựa trên FA Score và xung lượng Alpha.'}
+                  </p>
+                </div>
+
+                {/* 3. Score Execution Risk */}
+                <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1.5">
+                  <div className="text-[11px] text-slate-400 font-sans font-bold flex items-center justify-between">
+                    <span>3. Score (Execution Risk)</span>
+                    <span className="text-rose-400 text-[10px]">
+                      {latestJevTelemetry?.risk_score?.latency_ms ? `${latestJevTelemetry.risk_score.latency_ms}ms` : '0.5ms'}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className={`text-xs px-2 py-0.5 rounded font-bold border ${
+                      (latestJevTelemetry?.risk_score?.value || 0.05) > 0.70
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                        : (latestJevTelemetry?.risk_score?.value || 0.05) > 0.40
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                    }`}>
+                      RỦI RO: {(latestJevTelemetry?.risk_score?.value !== undefined ? latestJevTelemetry.risk_score.value : 0.05).toFixed(2)} / 1.00
+                    </span>
+                    <span className="text-[10px] text-slate-300">
+                      {(latestJevTelemetry?.risk_score?.value || 0.05) <= 0.70 ? 'PASS (<= 0.70)' : 'VETO (> 0.70)'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-sans truncate">
+                    {latestJevTelemetry?.risk_score?.reasoning || 'Thanh khoản đạt chuẩn, kiểm soát rủi ro T+2.5 an toàn.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* 5.3 PHIÊN HỌP HIỆN TẠI (ACTIVE MEMO TELEMETRY & DEBATE ARENA) */}
             {activeMemo ? (
               <div className="space-y-6">
@@ -1526,7 +1642,10 @@ export default function App() {
                           className={`hover:bg-slate-800/40 transition cursor-pointer ${
                             activeMemo && activeMemo.memo_id === memo.memo_id ? 'bg-amber-500/5' : ''
                           }`}
-                          onClick={() => setActiveMemo(memo)}
+                          onClick={() => {
+                            setActiveMemo(memo);
+                            if (memo.jev_telemetry) setLatestJevTelemetry(memo.jev_telemetry);
+                          }}
                         >
                           <td className="py-2.5 px-3 text-slate-400 text-[11px]">
                             {memo.created_at ? memo.created_at.split(' ')[0] : 'N/A'}

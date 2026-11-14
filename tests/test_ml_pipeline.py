@@ -17,7 +17,7 @@ sys.path.insert(0, str(BASE_DIR))
 import polars as pl
 from fastapi.testclient import TestClient
 from tools.ml_feature_extractor import MLFeatureExtractor
-from tools.ml_model_trainer import train_and_export_local_model
+from tools.ml_model_trainer import train_and_export_local_model, run_walk_forward_validation
 from tools.ml_predictor import UniversalAlphaPredictor
 from backtest.strategy_template import BaseFundStrategy
 from dashboard.api import app
@@ -46,6 +46,21 @@ def test_ml_trainer_and_package():
     assert model_file.exists()
     assert model_file.stat().st_size > 1000  # Ít nhất 1KB
     print(f"✅ Test 2 Passed: Đã đóng gói thành công {model_file.name} ({model_file.stat().st_size / 1024:.1f} KB).")
+
+def test_walk_forward_validation():
+    print("\n[TEST 2B] Kiểm tra Walk-Forward Validation Đa Giai Đoạn...")
+    parquet_file = Path("data/ml_dataset_train.parquet")
+    if not parquet_file.exists():
+        MLFeatureExtractor().export_dataset(parquet_file)
+    wf_res = run_walk_forward_validation(data_path=parquet_file, n_splits=3)
+    assert "folds" in wf_res
+    assert len(wf_res["folds"]) == 3
+    assert "mean_auc" in wf_res
+    assert 0.0 <= wf_res["mean_auc"] <= 1.0
+    for fold in wf_res["folds"]:
+        assert fold["test_samples"] > 0
+        assert 0.0 <= fold["roc_auc"] <= 1.0
+    print(f"✅ Test 2B Passed: Walk-Forward Validation hoàn tất với 3 folds, Mean AUC = {wf_res['mean_auc']:.4f}.")
 
 def test_ml_predictor_inference():
     print("\n[TEST 3] Kiểm tra Khả Năng Dự Báo & Bảng Xếp Hạng Thị Trường...")

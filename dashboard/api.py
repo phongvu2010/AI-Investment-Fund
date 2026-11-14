@@ -4,6 +4,8 @@ Cung cấp dữ liệu thời gian thực từ SQLite & Parquet hoàn toàn mi�
 """
 
 import sys
+import time
+import sqlite3
 from pathlib import Path
 from datetime import date
 from typing import Optional, List, Dict, Any
@@ -67,12 +69,45 @@ class OptimizeStrategyRequest(BaseModel):
     strategy_id: str = "vsa-momentum"
     ticker: str = "HPG"
 
+class UpsertFundamentalRequest(BaseModel):
+    ticker: str
+    period: Optional[str] = None
+    year: Optional[int] = 2026
+    quarter: Optional[int] = 3
+    revenue_growth_yoy: Optional[float] = 0.0
+    profit_growth_yoy: Optional[float] = 0.0
+    roe: Optional[float] = 0.0
+    gross_margin: Optional[float] = 0.0
+    debt_to_equity: Optional[float] = 0.0
+    ocf_to_net_income: Optional[float] = 1.0
+    pe: Optional[float] = 15.0
+    pb: Optional[float] = 1.5
+    pe_5y_median: Optional[float] = 15.0
+    piotroski_f_score: Optional[int] = 6
+    altman_z_score: Optional[float] = 2.6
+    notes: Optional[str] = None
+
 # ==========================================
 # API ENDPOINTS
 # ==========================================
 @app.get("/api/health")
 def health_check():
     return {"status": "HEALTHY", "fund": "AI Personal Investment Fund", "currency": "VND"}
+
+@app.get("/api/fundamentals/{ticker}")
+def get_company_fundamentals(ticker: str):
+    """Lấy dữ liệu BCTC và điểm số cơ bản FA Score từ SQLite & Parquet"""
+    from tools.fundamental_screener import FundamentalScreener
+    screener = FundamentalScreener()
+    return screener.get_fundamental_summary(ticker)
+
+@app.post("/api/fundamentals/upsert")
+def upsert_company_fundamentals(req: UpsertFundamentalRequest):
+    """Cập nhật hoặc thêm mới dữ liệu BCTC vào SQLite và Parquet"""
+    from tools.fundamental_screener import FundamentalScreener
+    screener = FundamentalScreener()
+    success = screener.upsert_company_financials(req.model_dump())
+    return {"status": "SUCCESS" if success else "FAILED", "ticker": req.ticker.upper()}
 
 @app.get("/api/nav/summary")
 def get_nav_summary():
@@ -171,7 +206,7 @@ def submit_fill_order(req: FillOrderRequest):
 # ==========================================
 @app.get("/api/committee/memos")
 def get_committee_memos(limit: int = 20):
-    """Lấy danh sách các phiên tranh biện và trạng thái hoạt động của từng Agent"""
+    """Lấy danh sách các phiên tranh biện, trạng thái hoạt động của từng Agent và Telemetry Jev AI System 1"""
     memos = db.get_decision_memos(limit=limit)
     agents_telemetry = [
         {"id": "macro", "name": "Macro Scout", "role": "Vĩ mô & Khí tượng sàn", "status": "ACTIVE", "icon": "Globe"},
@@ -182,11 +217,52 @@ def get_committee_memos(limit: int = 20):
         {"id": "cro", "name": "CRO Veto", "role": "Giám đốc Quản trị Rủi ro", "status": "ACTIVE", "icon": "Lock"},
         {"id": "cio", "name": "CIO Decision", "role": "Giám đốc Đầu tư Quỹ", "status": "ACTIVE", "icon": "Award"}
     ]
+
+    # Trích xuất Telemetry Jev AI System 1 mới nhất
+    latest_jev = None
+    if memos:
+        for m in memos:
+            if m.get("jev_telemetry"):
+                latest_jev = m.get("jev_telemetry")
+                break
+
     return {
         "status": "SUCCESS",
         "agents": agents_telemetry,
-        "memos": memos
+        "memos": memos,
+        "latest_jev_telemetry": latest_jev
     }
+
+@app.get("/api/jev/triage/{ticker}")
+@app.post("/api/jev/triage/{ticker}")
+def jev_triage_ticker(ticker: str):
+    """API Phản xạ nhanh Jev System 1 (< 500ms): Triage + Routing + Execution Risk"""
+    from tools.jev_decision_engine import JevDecisionEngine
+    jev = JevDecisionEngine()
+    t0 = time.perf_counter()
+    tr = jev.triage_market_event(ticker)
+    rt = jev.route_strategy_book(ticker)
+    rk = jev.score_execution_risk(ticker, action="BUY", proposed_vol=1000)
+    lat = (time.perf_counter() - t0) * 1000.0
+    return {
+        "status": "SUCCESS",
+        "ticker": ticker.upper(),
+        "latency_ms": round(lat, 2),
+        "target_met": lat < 500.0,
+        "triage": tr.to_dict(),
+        "route": rt.to_dict(),
+        "risk_score": rk.to_dict()
+    }
+
+@app.get("/api/guardrails/audit")
+def get_guardrails_audit(limit: int = 50):
+    """Lấy danh sách log kiểm duyệt Guardrails của Quỹ"""
+    from harness.guardrail_middleware import GuardrailMiddleware
+    GuardrailMiddleware(db)
+    with db.get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM guardrail_audit_log ORDER BY id DESC LIMIT ?;", (limit,)).fetchall()
+        return {"status": "SUCCESS", "logs": [dict(r) for r in rows]}
 
 @app.post("/api/committee/debate/{ticker}")
 def trigger_committee_debate(ticker: str, book: str = "QUANT"):

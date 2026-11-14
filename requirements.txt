@@ -31,8 +31,13 @@ duckdb>=1.1.0
 numpy>=1.26.0
 pandas>=2.2.0
 
-# 3. Động cơ Kiểm định Thị trường Việt Nam (Hunter Do)
+# 3. Động cơ Kiểm định Thị trường Việt Nam (Hunter Do) & Dữ liệu Realtime
 vn-backtest[optimize]>=0.1.4
+# Lưu ý: vnstock và vnstock-oapi (Thế hệ 6) hiện phân phối qua kho riêng (https://vnstocks.com) thay vì PyPI công khai (PyPI: versions none).
+# Hệ thống AI Fund đã xây dựng sẵn 6 tầng Fallback tự động (Cache -> SSI iBoard -> TCBS -> VNDIRECT -> Parquet 0-Token) nên không bắt buộc.
+# Nếu muốn sử dụng vnstock: pip install -U --extra-index-url https://vnstocks.com/api/packages vnstock vnstock-oapi
+# vnstock>=6.0.0
+# vnstock-oapi>=0.1.0
 
 # 4. Kênh Giao tiếp Telegram & Tiện ích
 python-telegram-bot>=21.0

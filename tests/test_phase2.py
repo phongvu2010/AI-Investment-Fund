@@ -105,5 +105,8 @@ def run_phase2_tests():
 
     print("\n🎉 GIAI ĐOẠN 2 ĐÃ HOÀN TẤT VÀ KIỂM THỬ THÀNH CÔNG RỰC RỠ!")
 
+def test_phase2_suite():
+    run_phase2_tests()
+
 if __name__ == "__main__":
     run_phase2_tests()

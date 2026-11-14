@@ -150,6 +150,58 @@ class TestDualBookAccounting:
         assert settings.QUANT_MAX_POSITION_PCT == 0.15
         assert settings.QUANT_HARD_STOP_LOSS_PCT == 0.07
 
+    def test_corporate_action_cash_and_stock(self, temp_db):
+        """Xác nhận nghiệp vụ kế toán cổ tức tiền (thuế 5%) và cổ tức cổ phiếu (pha loãng WAC)"""
+        acc = "CORP_ACC_01"
+        with temp_db.get_connection() as conn:
+            conn.execute("INSERT OR IGNORE INTO broker_accounts (account_id, broker_name) VALUES (?, 'VPS');", (acc,))
+        temp_db.record_cash_flow(account=acc, cash_type="DEPOSIT", amount=100_000_000.0, trade_date="2026-11-01", comment="Vốn test")
+
+        # 1. Mua 1.000 CP HPG giá 30.000 đ
+        temp_db.record_retroactive_fill(
+            ticker="HPG", action="BUY", executed_price=30.0, executed_volume=1000,
+            account=acc, strategy_book="CORE", trade_date="2026-11-01"
+        )
+        
+        # 2. Hạch toán Cổ tức tiền mặt: 1.500 đ/CP
+        # Gross = 1.000 * 1.500 = 1.500.000 đ. Thuế 5% = 75.000 đ. Net = 1.425.000 đ
+        cash_res = temp_db.record_corporate_action(
+            ticker="HPG",
+            action_type="CASH_DIVIDEND",
+            ex_date="2026-11-05",
+            account=acc,
+            cash_amount_per_share=1500.0,
+            tax_rate=0.05
+        )
+        assert cash_res["status"] == "APPLIED"
+        assert cash_res["gross_cash"] == 1_500_000.0
+        assert cash_res["tax_cash"] == 75_000.0
+        assert cash_res["net_cash"] == 1_425_000.0
+
+        # Kiểm tra bảng corporate_actions
+        corp_list = temp_db.get_corporate_actions(ticker="HPG")
+        assert len(corp_list) >= 1
+        assert corp_list[0]["action_type"] == "CASH_DIVIDEND"
+
+        # 3. Hạch toán Cổ tức cổ phiếu: Tỷ lệ 20% (1.000 CP -> thêm 200 CP)
+        pf_before = temp_db.get_portfolio(account=acc, strategy_book="CORE")[0]
+        old_avg = pf_before["avg_buy_price"]
+        
+        stock_res = temp_db.record_corporate_action(
+            ticker="HPG",
+            action_type="STOCK_DIVIDEND",
+            ex_date="2026-11-10",
+            account=acc,
+            ratio=0.20
+        )
+        assert stock_res["status"] == "APPLIED"
+        assert stock_res["total_bonus_shares"] == 200
+        
+        pf_after = temp_db.get_portfolio(account=acc, strategy_book="CORE")[0]
+        assert pf_after["quantity"] == 1200
+        expected_new_avg = (1000 * old_avg) / 1200
+        assert abs(pf_after["avg_buy_price"] - expected_new_avg) < 1.0
+
 
 class TestFundamentalScreenerPipeline:
     """Kiểm thử Hạng mục 2: Fundamental Data Pipeline (0 Token)"""
@@ -181,6 +233,29 @@ class TestFundamentalScreenerPipeline:
         # Test kiểm tra red flag
         flags = screener.detect_red_flags("HPG")
         assert isinstance(flags, list)
+
+    def test_screener_sector_aware_and_f_score(self):
+        """Xác nhận phân tích thích ứng ngành (Ngân hàng không bị phạt D/E) & F-Score"""
+        screener = FundamentalScreener()
+        vcb_summary = screener.get_fundamental_summary("VCB")
+        assert vcb_summary["ticker"] == "VCB"
+        assert vcb_summary["sector"] == "Ngân hàng/Tài chính"
+        assert vcb_summary["fa_score"] >= 65.0
+        # Ngân hàng không bị phạt cờ đỏ D/E > 2.0
+        assert not any("D/E" in f for f in vcb_summary["red_flags"])
+        assert "F-Score" in vcb_summary["summary"]
+
+    def test_screener_csv_template_and_export(self, tmp_path):
+        """Xác nhận tính năng xuất template và nạp dữ liệu BCTC từ CSV"""
+        screener = FundamentalScreener()
+        template_file = tmp_path / "template.csv"
+        screener.export_template_csv(template_file)
+        assert template_file.exists()
+        assert template_file.stat().st_size > 50
+
+        # Kiểm tra nạp lại file template vào screener
+        imported_count = screener.import_financials_from_csv(template_file)
+        assert imported_count == 2
 
 
 class TestLiveInvestmentCommittee:
@@ -257,6 +332,69 @@ class TestLiveInvestmentCommittee:
         res_reject = client.post(f"/api/committee/memos/{memo_id}/reject")
         assert res_reject.status_code == 200
         assert res_reject.json()["status"] == "REJECTED"
+
+    def test_cro_liquidity_gatekeeper_and_capping(self):
+        """Xác nhận cơ chế kiểm tra thanh khoản ADTV và Liquidity Capping của CRO"""
+        from tools.parquet_manager import ParquetMarketDataManager
+        pm = ParquetMarketDataManager()
+        
+        # 1. Kiểm tra mã lớn như FPT/HPG có ADTV > 10 tỷ VND
+        fpt_liq = pm.get_ticker_liquidity_metrics("FPT")
+        assert fpt_liq["is_liquid"] is True
+        assert fpt_liq["adtv_billion"] >= 10.0
+        assert fpt_liq["max_allowed_vol"] > 0
+        
+        hpg_liq = pm.get_ticker_liquidity_metrics("HPG")
+        assert hpg_liq["is_liquid"] is True
+        assert hpg_liq["adtv_billion"] >= 10.0
+        assert hpg_liq["max_allowed_vol"] > 0
+
+        # 2. Kiểm tra mã không tồn tại hoặc thanh khoản rỗng
+        fake_liq = pm.get_ticker_liquidity_metrics("NONEXISTENT_XYZ")
+        assert fake_liq["is_liquid"] is False
+        assert fake_liq["max_allowed_vol"] == 0
+
+    def test_market_regime_and_breadth_calculation(self):
+        """Xác nhận cỗ máy tính toán Độ rộng thị trường và xoay trục phân bổ vốn động"""
+        from tools.parquet_manager import ParquetMarketDataManager
+        pm = ParquetMarketDataManager()
+        regime = pm.get_market_regime()
+        assert "regime" in regime
+        assert regime["regime"] in ("UPTREND", "SIDEWAY", "DOWNTREND")
+        assert "breadth_ma20_pct" in regime
+        assert "recommended_core_pct" in regime
+        assert "recommended_quant_pct" in regime
+        assert "recommended_cash_pct" in regime
+        assert abs(regime["recommended_core_pct"] + regime["recommended_quant_pct"] + regime["recommended_cash_pct"] - 1.0) < 1e-4
+
+    def test_intraday_risk_scanner_alert_logic(self):
+        """Xác nhận logic quét rủi ro giữa phiên 14:15 PM trước phiên ATC"""
+        import asyncio
+        from tools.scheduler import FundScheduler
+        sched = FundScheduler()
+        # Chạy thử nghiệm quét rủi ro giữa phiên không gây crash
+        asyncio.run(sched.run_intraday_risk_job())
+
+    def test_intraday_data_feed_and_fusion(self):
+        """Xác nhận động cơ Intraday Data Feed và cơ chế ghép nến live vào Parquet"""
+        from tools.intraday_data_feed import IntradayDataFeed
+        from tools.parquet_manager import ParquetMarketDataManager
+
+        feed = IntradayDataFeed()
+        assert feed is not None
+        # Kiểm tra phương thức get_live_bar
+        bar = feed.get_live_bar("HPG", price_scale=1000.0)
+        if bar:
+            assert bar["ticker"] == "HPG"
+            assert "close" in bar
+            assert "volume" in bar
+
+        # Kiểm tra ParquetMarketDataManager đọc lịch sử kèm nến live
+        pm = ParquetMarketDataManager()
+        df = pm.get_ticker_history("HPG", days=10, include_intraday=True)
+        assert len(df) > 0
+        assert "close" in df.columns
+        assert "trade_date" in df.columns
 
 
 class TestMachineLearningEnhancements:

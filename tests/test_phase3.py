@@ -139,5 +139,8 @@ def run_phase3_tests():
     print("🎉 TOÀN BỘ CÁC BÀI TEST GIAI ĐOẠN 3 ĐỀU THÀNH CÔNG RỰC RỠ!")
     print("=" * 70)
 
+def test_phase3_suite():
+    run_phase3_tests()
+
 if __name__ == "__main__":
     run_phase3_tests()

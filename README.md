@@ -1,84 +1,141 @@
 # 🏛️ QUỸ ĐẦU TƯ CHỨNG KHOÁN CÁ NHÂN TỰ TRỊ (AI INVESTMENT FUND)
 ### Autonomous Multi-Agent Hedge Fund • Vietnam Stock Market (HOSE / HNX / UPCOM)
 
-Hệ thống Quỹ đầu tư định lượng cá nhân vận hành tự động theo mô hình **Tổ chức Đa Tác tử (Multi-Agent Organization)**, kết hợp động cơ Backtest chuẩn sàn Việt Nam (`vn-backtest`), Cơ sở dữ liệu SQLite Mark-to-Market, Tương tác di động qua Telegram Bot, Web Dashboard Zero-Token (FastAPI + React 19) và Hạ tầng Machine Learning (LightGBM).
+Hệ thống Quỹ đầu tư định lượng cá nhân vận hành tự động theo mô hình **Tổ chức Đa Tác tử (Multi-Agent Organization)**, kết hợp động cơ Backtest chuẩn sàn Việt Nam (`vn-backtest`), Kiến trúc 2 Sổ chiến lược độc lập (**Core-Satellite Dual Book**), Hệ thống phản xạ siêu tốc **Jev Decision Engine** (System 1), Cơ chế kiểm soát quyền hạn **Harness Guardrail Middleware & Verification Loop**, Cơ sở dữ liệu SQLite Mark-to-Market, Tương tác di động qua Telegram Bot, Web Dashboard Zero-Token (FastAPI + React 19) và Hạ tầng Machine Learning (LightGBM).
 
 ---
 
 ## 📑 MỤC LỤC
 1. [Kiến Trúc & Triết Lý Vận Hành](#1-kiến-trúc--triết-lý-vận-hành)
-2. [Cấu Trúc Thư Mục Hệ Thống](#2-cấu-trúc-thư-mục-hệ-thống)
-3. [Cài Đặt & Chuẩn Bị Môi Trường](#3-cài-đặt--chuẩn-bị-môi-trường)
-4. [Cấu Hình Hệ Thống (.env)](#4-cấu-hình-hệ-thống-env)
-5. [Quy Trình Vận Hành Hằng Ngày (Daily SOPs)](#5-quy-trình-vận-hành-hằng-ngày-daily-sops)
-6. [Phòng Thí Nghiệm Chiến Lược (Backtest & Strategy Lab)](#6-phòng-thí-nghiệm-chiến-lược-backtest--strategy-lab)
-7. [Động Cơ Tự Học Hỏi & Tối Ưu Hóa (Self-Healing)](#7-động-cơ-tự-học-hỏi--tối-ưu-hóa-self-healing)
-8. [Hạ Tầng Machine Learning (Universal Quant Alpha Model)](#8-hạ-tầng-machine-learning-universal-quant-alpha-model)
-9. [Khởi Chạy Web Dashboard & Docker Compose](#9-khởi-chạy-web-dashboard--docker-compose)
-10. [Hệ Thống Kế Toán Quỹ & Quản Trị Đa Tài Khoản (Historical Vault)](#10-hệ-thống-kế-toán-quỹ--quản-trị-đa-tài-khoản-historical-vault)
-11. [Bộ Kiểm Thử Hệ Thống (Test Suites)](#11-bộ-kiểm-thử-hệ-thống-test-suites)
+2. [Cơ Cấu Tổ Chức & Nhân Sự AI (.agent)](#2-cơ-cấu-tổ-chức--nhân-sự-ai-agent)
+3. [Cấu Trúc Thư Mục Hệ Thống](#3-cấu-trúc-thư-mục-hệ-thống)
+4. [Cài Đặt & Chuẩn Bị Môi Trường](#4-cài-đặt--chuẩn-bị-môi-trường)
+5. [Cấu Hình Hệ Thống (.env)](#5-cấu-hình-hệ-thống-env)
+6. [Quy Trình Vận Hành Hằng Ngày (Daily SOPs)](#6-quy-trình-vận-hành-hằng-ngày-daily-sops)
+7. [Hệ Thống Phản Xạ Jev Engine & Harness Guardrails](#7-hệ-thống-phản-xạ-jev-engine--harness-guardrails)
+8. [Phòng Thí Nghiệm Chiến Lược & Tự Học (Backtest & Self-Healing Lab)](#8-phòng-thí-nghiệm-chiến-lược--tự-học-backtest--self-healing-lab)
+9. [Hạ Tầng Machine Learning (Universal Quant Alpha Model)](#9-hạ-tầng-machine-learning-universal-quant-alpha-model)
+10. [Khởi Chạy Web Dashboard & Docker Compose](#10-khởi-chạy-web-dashboard--docker-compose)
+11. [Hệ Thống Kế Toán Quỹ & Quản Trị Đa Tài Khoản (Historical Vault)](#11-hệ-thống-kế-toán-quỹ--quản-trị-đa-tài-khoản-historical-vault)
+12. [Bộ Kiểm Thử Hệ Thống (Test Suites - 54 Tests)](#12-bộ-kiểm-thử-hệ-thống-test-suites---54-tests)
 
 ---
 
 ## 1. KIẾN TRÚC & TRIẾT LÝ VẬN HÀNH
 
-### Mô hình Tranh biện Đối kháng (Adversarial Multi-Agent Framework)
-Không để một AI duy nhất ra quyết định. Mọi đề xuất giải ngân đều phải trải qua cuộc tranh luận gay gắt:
-* **Phe Bò (Bull Advocate):** Tìm kiếm tiềm năng tăng trưởng, xung lượng giá và sự bùng nổ của dòng tiền.
-* **Phe Gấu / Đội Đỏ (Bear Advocate - Red Team):** Bới lông tìm vết, đào bới rủi ro nợ vay, thanh khoản, cản kỹ thuật và các bẫy giá giả (Bull-traps).
-* **Giám đốc Rủi ro (CRO):** Nắm quyền Phủ quyết Tuyệt đối (**VETO Power**). Nếu vi phạm bất kỳ hạn mức rủi ro nào (sụt giảm vốn, thiếu thanh khoản, tỷ trọng quá lớn), lệnh bị hủy lập tức.
-* **Giám đốc Đầu tư (CIO):** Tổng hợp luận điểm hai chiều, cân nhắc xác suất và ký quyết định đầu tư (Investment Decision Memo).
-* **Kế toán Quỹ (Accountant):** Chốt sổ NAV Mark-to-Market hằng ngày, tính toán chính xác thuế (0.1%), phí (0.15%), trượt giá và quyền cổ tức.
-* **Kiểm toán viên (Auditor):** Hậu kiểm, khám nghiệm thất bại (Post-Mortem) khi vị thế chạm ngưỡng cắt lỗ (-7.0%) để cập nhật quy tắc phòng thủ vào Hiến pháp Quỹ.
+```mermaid
+flowchart TD
+    subgraph DataLayer["1. Data & Quant Engine (0 Token)"]
+        BQ["BigQuery EOD (1.600 mã)"] --> PQ["DuckDB / Polars Parquet 5Y"]
+        PQ --> ML["LightGBM Alpha Predictor"]
+        PQ --> BT["vn-backtest Engine"]
+        PQ --> FA["Fundamental Screener (BCTC)"]
+    end
 
-### Triết lý Vận hành 0 Token (Zero-Token Architecture)
+    subgraph FastReflex["2. Fast Reflex System (System 1 - Jev Engine)"]
+        PQ --> JevTriage["Jev Decision: Noul / Choice / Score (<500ms)"]
+        JevTriage --> Gate["Guardrail Middleware & Hard Veto"]
+    end
+
+    subgraph ReasoningLayer["3. Multi-Agent Reasoning (System 2 - LLM)"]
+        Gate --> Debate["Debate Council: Bull vs Bear (Red Team)"]
+        Debate --> CRO["Risk Office (CRO VETO)"]
+        CRO --> CIO["Portfolio Manager (CIO Memo)"]
+    end
+
+    subgraph ExecutionLayer["4. Human-in-the-Loop & Operations"]
+        CIO --> Tele["Telegram Bot (1-Touch Approval)"]
+        Tele --> Human["Chủ Quỹ (Xác thực SmartOTP trên App)"]
+        Human --> Vault["SQLite fund_vault.db (Mark-to-Market, T+2.5)"]
+        Vault --> Dash["FastAPI + React 19 Dashboard"]
+    end
+```
+
+### 1.1 Triết lý Vận hành 0 Token (Zero-Token Architecture)
 * 100% các tác vụ tính toán toán học, chỉ báo kỹ thuật, quét dữ liệu nến 5 năm, backtest, Mark-to-Market NAV, xếp hạng Machine Learning và phục vụ Web Dashboard đều chạy bằng **Python + DuckDB + Polars + SQLite** nội bộ.
-* **Hoàn toàn miễn phí, tiêu tốn 0 token LLM.**
+* **Hoàn toàn miễn phí, tiêu tốn 0 token LLM.** LLM chỉ được đánh thức khi cần suy luận chiến lược chuyên sâu (Adversarial Debate, Báo cáo đầu tư CIO, Khám nghiệm sai lầm Post-Mortem).
+
+### 1.2 Kiến trúc 2 Sổ Chiến Lược (Core-Satellite Dual-Book)
+Hệ thống phân tách vốn rõ ràng thành 2 phân hệ độc lập:
+* **Sổ CORE (Đầu tư Cơ bản Trung & Dài Hạn):**
+  * Hạn mức tối đa: **70% tổng NAV**.
+  * Hạn mức vị thế đơn lẻ: **Tối đa 25% NAV/mã**.
+  * Ngưỡng cắt lỗ cứng: **-15.0%** (cho phép chịu đựng biến động chu kỳ và kiểm định nền giá).
+* **Sổ QUANT (Giao dịch Ngắn Hạn & Xung Lượng):**
+  * Hạn mức tối đa: **30% tổng NAV**.
+  * Hạn mức vị thế đơn lẻ: **Tối đa 15% NAV/mã**.
+  * Ngưỡng cắt lỗ cứng: **-7.0%** (cắt lỗ thần tốc, bảo toàn vốn, chống kẹp hàng).
+
+### 1.3 Cơ Chế Phản Xạ Siêu Tốc (Jev AI System 1) & Kiểm Soát Quyền Hạn (Harness Guardrails)
+* **Jev Decision Engine:** Sử dụng các Primitive quyết định phân biệt (`Noul` - True/False + Confidence, `Choice` - Định tuyến CORE vs QUANT vs IGNORE, `Score` - Điểm số rủi ro thực thi [0.0 - 1.0]) với thời gian phản hồi `< 500ms`.
+* **Guardrail Middleware:** Bộ lọc chặn cứng (**Hard Veto**), tự động từ chối đề xuất lệnh nếu vi phạm hạn mức tỷ trọng, kích hoạt ngắt mạch khi sụt giảm vốn tuần quá **5.0%**, kiểm tra thanh khoản bắt buộc ($\text{ADTV}_{20} \ge 10\text{ Tỷ}$, $\text{ADV}_{20} \ge 100.000\text{ CP}$), trần tham gia thị trường $\le 2\%$ ADV, và bẫy kẹt sàn (Floor-lock).
+* **Harness Verification Loop:** Vòng lặp kiểm định mã hóa tự động thẩm định chiến lược, phát hiện quá khớp (Overfitting), tự động sửa lỗi và lưu bài học thể chế vào `.agent/journals/`.
 
 ---
 
-## 2. CẤU TRÚC THƯ MỤC HỆ THỐNG
+## 2. CƠ CẤU TỔ CHỨC & NHÂN SỰ AI (.agent)
+
+| Phòng ban | Nhân sự AI | Trách nhiệm cốt lõi |
+| :--- | :--- | :--- |
+| **Ban Nghiên cứu & Phân tích** | `macro_analyst.md`<br>`fundamental_analyst.md`<br>`technical_analyst.md` | • Xác định chế độ thị trường (*Heavy Downtrend, Sideway, Bullish*).<br>• Phân tích BCTC, phát hiện bất thường kế toán, định giá DCF, P/E, P/B.<br>• Nhận diện Price Action, VSA, hỗ trợ/kháng cự, điểm nổ volume. |
+| **Hội đồng Phản biện (Debate)** | `bull_advocate.md`<br>`bear_advocate.md` | • **Phe Bò:** Luận điểm tăng trưởng, kỳ vọng sinh lời $R:R \ge 2.5:1$.<br>• **Phe Gấu (Red Team):** Vạch lá tìm sâu, bới móc rủi ro pha loãng, nợ vay, thanh khoản, bẫy bull-trap. |
+| **Ban Quản trị Rủi ro** | `risk_officer.md` (CRO) | • Nắm **Quyền Phủ Quyết Tuyệt Đối (VETO Power)**.<br>• Tính toán Position Sizing, khóa cứng Stop-loss, bảo vệ tài sản quỹ. |
+| **Ban Điều hành & Quyết định**| `cio.md`<br>**Bạn (Human-in-the-Loop)** | • CIO tổng hợp biên bản phản biện 2 chiều, ký Tờ trình gửi Telegram.<br>• **Bạn giữ quyền sinh sát tối cao**, nhập mã OTP khớp lệnh trên app CTCK. |
+| **Kế toán & Kiểm toán** | `fund_accountant.md`<br>`portfolio_auditor.md` | • Kế toán trưởng tự động: Mark-to-Market NAV hằng ngày, thuế 0.1%, phí 0.15%, quyền cổ tức NĐ 126.<br>• Kiểm toán viên: Đo độ trượt giá (Slippage), chủ trì khám nghiệm Post-Mortem khi dính cắt lỗ. |
+
+---
+
+## 3. CẤU TRÚC THƯ MỤC HỆ THỐNG
 
 ```
 AI Investment Fund/
 ├── .agent/                       # Não bộ tổ chức Multi-Agent
-│   ├── agents/                   # Nhân sự AI (CIO, CRO, Bull, Bear, Accountant...)
-│   ├── rules/                    # Hiến pháp Quỹ & Hạn mức rủi ro
-│   ├── workflows/                # Quy trình SOP chuẩn (Morning, Debate, EOD, Post-Mortem)
-│   ├── skills/                   # Kho Kỹ năng Chiến lược đầu tư (Agent Skills)
+│   ├── agents/                   # 9 vị trí nhân sự AI chuyên trách
+│   ├── rules/                    # Hiến chương Quỹ, Quy chế thực thi & Bộ hạn mức rủi ro
+│   ├── workflows/                # 5 Quy trình SOP chuẩn (Morning, Debate, Execution, EOD, Post-Mortem)
+│   ├── skills/                   # Kho Kỹ năng Chiến lược đầu tư (strategy-vsa-momentum, valuation-dcf)
 │   └── journals/                 # Nhật ký Tiến hóa & Khám nghiệm thất bại (Post-Mortem Memos)
 ├── backtest/                     # Động cơ Backtest chuẩn sàn VN (vn-backtest)
-│   ├── runner.py                 # Bộ thực thi kiểm thử 5 năm & xuất biểu đồ tương tác HTML
+│   ├── runner.py                 # Bộ thực thi kiểm thử 5 năm & xuất biểu đồ Plotly tương tác HTML
 │   ├── report_adapter.py         # Thẩm định Hội đồng CRO & biên tập Markdown
 │   └── strategy_template.py      # Lớp cơ sở BaseFundStrategy & chỉ báo Polars
-├── config/                       # Cấu hình hệ thống (settings.py)
+├── config/                       # Cấu hình tham số hệ thống (settings.py)
 ├── dashboard/                    # Web Dashboard Zero-Token
 │   ├── api.py                    # Backend REST API (FastAPI)
 │   ├── reports/                  # Thư mục lưu biểu đồ Plotly tương tác HTML
 │   └── frontend/                 # Giao diện người dùng (React 19 + Vite + Tailwind CSS)
 ├── data/                         # Kho dữ liệu định lượng Parquet
 │   ├── market_history_5y.parquet # Dữ liệu lịch sử 5 năm toàn thị trường (ZSTD nén)
+│   ├── fundamental_quarterly.parquet # Dữ liệu BCTC & chỉ số tài chính các quý
 │   └── ml_dataset_train.parquet  # Ma trận 15 đặc trưng & nhãn Triple-Barrier ML
 ├── database/                     # Kho lưu trữ SQLite bất biến
-│   ├── schema.sql                # Định nghĩa 6 bảng CSDL chuẩn mực
+│   ├── schema.sql                # Định nghĩa 6 bảng CSDL chuẩn mực + guardrail_audit_log
 │   ├── fund_vault.db             # File SQLite lưu sổ lệnh, portfolio, NAV daily
-│   └── db_manager.py             # Kế toán giao dịch, tính giá bình quân gia quyền
+│   └── db_manager.py             # Kế toán giao dịch, tính giá bình quân gia quyền WAC
+├── harness/                      # Khung Kiểm Soát & Điều Phối An Toàn (Harness Engineering)
+│   ├── context_manager.py        # Tiêm bối cảnh quỹ & khí tượng thị trường vào Prompt
+│   ├── guardrail_middleware.py   # Bộ lọc quyền hạn & Veto cứng (Hard Veto & Circuit Breaker)
+│   └── verification_loop.py      # Vòng lặp kiểm định mã hóa & tự khắc phục (Auto-Healing)
 ├── interfaces/                   # Kênh giao tiếp Người - Máy
 │   ├── telegram_bot.py           # Bot Telegram tương tác 1 chạm & bóc tách /fill
 │   └── message_templates.py      # Mẫu tin nhắn Tờ trình đầu tư 2 chiều Bull/Bear
 ├── models/                       # Thư mục chứa mô hình Machine Learning (.joblib)
 ├── notebooks/                    # Jupyter Notebook huấn luyện trên Kaggle / Colab
-│   └── kaggle_train_lightgbm.ipynb
-├── tests/                        # Toàn bộ Test Suites kiểm thử tự động
-├── tools/                        # Công cụ nghiệp vụ tự động hóa
+├── tests/                        # 9 Bộ Test Suites kiểm thử tự động toàn diện (54 tests)
+├── tools/                        # Bộ công cụ định lượng & tự động hóa
 │   ├── bigquery_sync.py          # Đồng bộ BigQuery -> Parquet 5 năm & nến ngày
-│   ├── parquet_manager.py        # Truy vấn Parquet siêu tốc bằng DuckDB & Polars
-│   ├── strategy_generator.py     # Đóng gói chiến lược thành Agent Skill chuẩn
-│   ├── strategy_optimizer.py     # Động cơ Tự học hỏi, Sửa sai & Tối ưu hóa tham số
+│   ├── fundamental_screener.py   # Sàng lọc cơ bản, chấm điểm sức khỏe BCTC
+│   ├── intraday_data_feed.py     # Nạp và kiểm định luồng nến trong phiên (Intraday)
+│   ├── investment_debate_engine.py # Động cơ điều phối tranh biện 2 chiều Bull/Bear
+│   ├── jev_decision_engine.py    # Hệ thống phản xạ quyết định Jev AI System 1 (<500ms)
 │   ├── ml_feature_extractor.py   # Trích xuất 15 đặc trưng kỹ thuật & nhãn 3 rào cản
 │   ├── ml_model_trainer.py       # Huấn luyện nhanh Universal Alpha Model (LightGBM)
 │   ├── ml_predictor.py           # Động cơ suy luận chấm điểm Alpha Score < 0.005s
-│   └── scheduler.py              # Bộ lập lịch tự động kích hoạt cronjob hàng ngày
+│   ├── parquet_manager.py        # Truy vấn Parquet siêu tốc bằng DuckDB & Polars
+│   ├── scheduler.py              # Bộ lập lịch tự động kích hoạt cronjob hàng ngày
+│   ├── strategy_generator.py     # Đóng gói chiến lược thành Agent Skill chuẩn
+│   ├── strategy_optimizer.py     # Động cơ Tự học hỏi, Sửa sai & Tối ưu hóa tham số
+│   └── transaction_importer.py   # Replay 1.710 giao dịch lịch sử, cân bằng vốn gốc
 ├── main.py                       # Bộ điều phối trung tâm (CLI Orchestrator)
 ├── Dockerfile                    # Đóng gói Container độc lập môi trường
 ├── docker-compose.yml            # Khởi chạy toàn bộ hệ thống bằng 1 câu lệnh
@@ -87,9 +144,9 @@ AI Investment Fund/
 
 ---
 
-## 3. CÀI ĐẶT & CHUẨN BỊ MÔI TRƯỜNG
+## 4. CÀI ĐẶT & CHUẨN BỊ MÔI TRƯỜNG
 
-### Cách 1: Chạy trực tiếp trên máy vật lý (macOS / Linux / Windows WSL2)
+### Cách 1: Chạy trực tiếp trên máy tính (macOS / Linux / Windows WSL2)
 
 1. **Yêu cầu:** Python 3.11 hoặc 3.12, Node.js v18+.
 2. **Cài đặt thư viện Python:**
@@ -106,15 +163,14 @@ AI Investment Fund/
    cd ../..
    ```
 
-### Cách 2: Khởi chạy bằng Docker Compose (Khuyên dùng cho Máy chủ / VPS)
-Không cần cài đặt Python hay Node.js trên máy chủ, Docker sẽ tự động đóng gói toàn bộ:
+### Cách 2: Khởi chạy bằng Docker Compose (Khuyên dùng cho Server / VPS)
 ```bash
 docker compose up -d --build
 ```
 
 ---
 
-## 4. CẤU HÌNH HỆ THỐNG (.env)
+## 5. CẤU HÌNH HỆ THỐNG (.env)
 
 Tạo file `.env` từ file mẫu `.env.example`:
 ```bash
@@ -136,316 +192,166 @@ GCP_PROJECT_ID="ai-trading-system-496014"
 GCP_DATASET="vn_stock"
 GCP_RAW_PRICE_TABLE="raw_price"
 GCP_ADJ_PRICE_TABLE="adj_price"
-GOOGLE_APPLICATION_CREDENTIALS="credentials/service_account.json"
+GOOGLE_APPLICATION_CREDENTIALS=".secrets/credentials.json"
 ```
 
 ---
 
-## 5. QUY TRÌNH VẬN HÀNH HẰNG NGÀY (DAILY SOPS)
+## 6. QUY TRÌNH VẬN HÀNH HẰNG NGÀY (DAILY SOPS)
 
-> 💡 **HỆ THỐNG MẶC ĐỊNH CHẠY TỰ ĐỘNG 100% (BẠN KHÔNG CẦN CHẠY THỦ CÔNG MỖI NGÀY):**
-> Khi bạn khởi động hệ thống qua **Docker Compose** (`docker compose up -d`) hoặc bật cỗ máy lập lịch (`python3 tools/scheduler.py`), container `fund-scheduler` sẽ chạy ngầm 24/7 và **tự động thức dậy thực thi đúng giờ** (từ Thứ 2 đến Thứ 6):
-> * **08:00 AM:** Tự động tạo bản tin Morning Briefing & bắn danh sách cổ phiếu đột biến Volume lên Telegram.
-> * **15:30 PM:** Tự động chốt sổ kế toán NAV (Mark-to-Market) và gửi báo cáo biến động tài sản lên Telegram.
-> * **20:00 PM:** Tự động rà soát và nhắc nhở đối soát các lệnh chờ khớp trong ngày.
-> * **21:00 PM:** Tự động kết nối BigQuery tải nến mới nhất của phiên về nối vào file Parquet 5 năm.
+> 💡 **HỆ THỐNG MẶC ĐỊNH CHẠY TỰ ĐỘNG 100% QUA SCHEDULER:**
+> Container `fund-scheduler` chạy ngầm 24/7 và kích hoạt đúng giờ (Thứ 2 đến Thứ 6):
+> * **08:00 AM:** Morning Briefing & Jev AI Reflex Triage quét volume đột biến.
+> * **15:30 PM:** Chốt sổ kế toán NAV (Mark-to-Market), xử lý quyền T+2.5 và bắn báo cáo lên Telegram.
+> * **20:00 PM:** Rà soát và nhắc nhở đối soát các lệnh chờ khớp trong ngày.
+> * **21:00 PM:** Đồng bộ BigQuery EOD tải nến mới nhất về file Parquet 5 năm.
 
----
+### Các Lệnh Kích Hoạt Thủ Công Khi Cần (CLI):
 
-### Chế độ Kích Hoạt Thủ Công Theo Nhu Cầu (On-Demand / Manual Triggers)
-Các câu lệnh dưới đây **chỉ dùng khi bạn muốn chủ động can thiệp**, chạy thử nghiệm ngoài giờ hoặc kích hoạt cuộc họp phân tích cho một mã cổ phiếu bất kỳ:
+#### 1. Kiểm tra trạng thái toàn diện của Quỹ:
+```bash
+python3 main.py --status
+```
 
-#### 1. Buổi Sáng (08h45) - Morning Briefing Thủ Công
-Chạy quét thị trường và kiểm tra trạng thái quỹ ngay lập tức:
+#### 2. Kích hoạt Morning Briefing & Sơ lọc Jev System 1:
 ```bash
 python3 main.py --workflow morning
 ```
-* Báo cáo tài sản ròng NAV và danh mục đang nắm giữ.
-* DuckDB quét các mã có khối lượng giao dịch đột biến (Volume > 1.5x) phiên trước đó.
-* Machine Learning xếp hạng các mã có điểm số Alpha cao nhất.
 
-#### 2. Phiên Giao Dịch (09h00 - 14h45) - Hội Đồng Tranh Biện & Phát Lệnh Thủ Công
-Kích hoạt tranh biện đa tác tử và gửi Tờ trình đầu tư đến điện thoại qua Telegram cho mã bất kỳ:
+#### 3. Kích hoạt Hội đồng Tranh biện & Thẩm định đề xuất cho mã cụ thể:
 ```bash
-python3 main.py --workflow debate --ticker HPG
-```
-* **Phe Bò (Bull):** Đưa ra luận điểm tăng giá.
-* **Phe Gấu (Bear):** Chỉ ra các rủi ro cần phòng vệ.
-* **CRO & CIO:** Duyệt lệnh và gửi thông báo kèm 2 nút bấm lên Telegram:
-  - `[✅ Đã đặt lệnh chờ]`: Đánh dấu trạng thái `SUBMITTED` vào sổ lệnh.
-  - `[❌ Bỏ qua / Hủy lệnh]`: Hủy đề xuất.
+# Tranh biện theo Sổ CORE (Cơ bản)
+python3 main.py --workflow debate --ticker HPG --book CORE
 
-#### Cơ chế Nhập Bù Lệnh Khớp Thực Tế (`/fill`)
-Bạn đặt lệnh trực tiếp trên app công ty chứng khoán (VPS, SSI, TCBS...). Khi lệnh khớp thực tế, bạn chỉ cần nhắn vào Telegram Bot:
+# Tranh biện theo Sổ QUANT (Trading)
+python3 main.py --workflow debate --ticker SSI --book QUANT
+```
+
+#### 4. Khớp lệnh thực tế qua Telegram Bot (`/fill`):
+Khi đặt lệnh thực tế trên app CTCK xong, nhắn vào Telegram:
 ```text
 /fill HPG 5000 28.2
+khớp SSI 3000 giá 32.5
 ```
-Hoặc nhắn bằng văn bản tự nhiên:
-```text
-khớp HPG 5000 giá 28.2
-mua SSI 3000 32.5
-```
-Hệ thống sẽ tự động bóc tách, trừ tiền mặt, cập nhật số dư cổ phiếu và tính lại giá vốn bình quân gia quyền.
+Hệ thống sẽ tự động bóc tách, trừ tiền mặt, cập nhật cổ phiếu và tính lại giá vốn bình quân gia quyền.
 
-#### 3. Buổi Tối (20h30 - 21h00) - Đồng Bộ Dữ Liệu & Chốt Sổ NAV Tự Động / 1-Click
-1. **Đồng bộ giá từ BigQuery 1-Click trên Web Dashboard:**
-   Bạn chỉ cần mở Web Dashboard và bấm nút **`[Đồng Bộ Giá BigQuery]`** trên thanh Header. Hệ thống sẽ:
-   * Tự động kéo nến đóng cửa thực tế mới nhất từ Google BigQuery (`raw_price`).
-   * Tự động chốt sổ tuần tự cả 2 phiên $T-1$ và $T$, đảm bảo **Biến Động Trong Ngày (Daily PnL)** phản ánh chính xác 100% mức tăng/giảm thực tế của thị trường.
-   * Tự động định giá cổ phiếu treo sàn (`FLC`) về `0,00 đ` theo nguyên tắc thận trọng.
-2. **Hoặc kích hoạt qua dòng lệnh:**
-   ```bash
-   python3 tools/bigquery_sync.py --mode daily
-   python3 main.py --workflow eod
-   ```
-   *(Nếu mới cài đặt lần đầu và chưa có file nến 5 năm, chạy: `python3 tools/bigquery_sync.py --mode full` hoặc `--mode demo`)*.
-
----
-
-## 6. PHÒNG THÍ NGHIỆM CHIẾN LƯỢC (BACKTEST & STRATEGY LAB)
-
-> 💡 **CƠ CHẾ VẬN HÀNH: BẠN RA Ý TƯỞNG (PROMPT) ➔ AI TỰ ĐỘNG LẬP TRÌNH & KIỂM ĐỊNH 100%**  
-> Bạn **không bắt buộc phải biết code Python**. Toàn bộ quy trình từ chuyển hóa ý tưởng thành mã nguồn, chạy kiểm thử 5 năm, thẩm định rủi ro và đóng gói thành Kỹ năng AI (`Agent Skill`) đều được tự động hóa.
-
----
-
-### HƯỚNG DẪN TẠO CHIẾN LƯỢC MỚI (DÀNH CHO NGƯỜI DÙNG)
-
-Khi muốn nghiên cứu hoặc thử nghiệm một chiến lược đầu tư mới, bạn chỉ cần thực hiện theo **3 bước đơn giản** sau:
-
-#### Bước 1: Nêu Ý Tưởng Bằng Ngôn Ngữ Tự Nhiên Với AI Assistant (Prompting)
-Bạn chỉ cần mở khung chat và gửi yêu cầu bằng tiếng Việt theo một trong hai cách:
-
-* **Cách A - Bạn đã có sẵn ý tưởng kỹ thuật cụ thể:**
-  > *"Hãy tạo cho tôi chiến lược **Vượt Đỉnh 52 Tuần (52-Week High Breakout)** cho mã **HPG** và **SSI**. Điều kiện vào lệnh: Giá vượt đỉnh 52 tuần gần nhất kèm Volume > 1.3 lần trung bình 20 phiên và điểm ML Score >= 0.60. Thoát lệnh khi giá thủng đường MA20 hoặc cắt lỗ 7%. Chạy backtest 5 năm và đóng gói thành Skill giúp tôi."*
-
-* **Cách B - Bạn muốn AI tự động đề xuất ý tưởng định lượng:**
-  > *"Dựa trên kho dữ liệu Parquet 5 năm của nhóm VN30, hãy phân tích và đề xuất cho tôi 1 chiến lược theo trường phái Bắt đáy Quá bán (RSI Mean Reversion) đạt tiêu chuẩn Sharpe >= 1.20 và Max Drawdown <= 15%."*
-
----
-
-#### Bước 2: AI Tự Động Thực Thi Toàn Bộ Quy Trình Kỹ Thuật (Trong 10-15 Giây)
-Ngay sau khi nhận prompt, hệ thống AI sẽ tự động kích hoạt chuỗi tác vụ ngầm:
-1. **Tự động viết mã Python:** Tạo lớp thuật toán kế thừa [`BaseFundStrategy`](backtest/strategy_template.py) với các chỉ báo vector hóa siêu tốc (SMA, EMA, RSI, Bollinger Bands, Volume Ratios).
-2. **Tự động chạy `vn-backtest` 5 năm:** Mô phỏng khớp lệnh thực tế trên 1.250 phiên nến điều chỉnh, tuân thủ nghiêm ngặt chu kỳ thanh toán $T+2.5$, bước giá trần/sàn, lô chẵn 100, phí môi giới 0.15% và thuế bán 0.1%.
-3. **Thẩm định Hội đồng Giám đốc Rủi ro (CRO Evaluation):** Đối chiếu kết quả định lượng với Hiến pháp Quỹ:
-   - ✅ Sharpe Ratio $\ge 1.20$
-   - ✅ Max Drawdown $\le 15.00\%$
-   - ✅ Profit Factor $\ge 1.80$
-   - ✅ Tổng số lệnh kiểm nghiệm $\ge 15$ lệnh (đảm bảo đủ mẫu thống kê)
-4. **Tự động đóng gói thành Skill:** Lưu vào `.agent/skills/strategy-<tên-chiến-lược>/` gồm:
-   - [`SKILL.md`](.agent/skills/strategy-vsa-momentum/SKILL.md): Bản mô tả quy tắc vào/ra lệnh cho các Agent đọc hiểu.
-   - `backtest_report.md`: Báo cáo định lượng chi tiết và kết luận thẩm định của CRO.
-   - `status.json`: Trạng thái thẩm định (`APPROVED_TIER_A`, `APPROVED_TIER_B`, hoặc `REJECTED`).
-   - `dashboard/reports/<tên>.html`: Biểu đồ đường cong vốn (Equity Curve) Plotly tương tác trực quan.
-
----
-
-#### Bước 3: Nếu Chiến Lược Bị CRO Từ Chối (`REJECTED`) ➔ Kích Hoạt Tự Học Sửa Sai
-Nếu ý tưởng ban đầu chưa đạt chuẩn rủi ro (như Sharpe âm hoặc bị dính bẫy giá giả), bạn **không cần phải tự ngồi đoán mò tham số**. Hãy để Động cơ Tối ưu hóa tự động sửa sai:
-
+#### 5. Chốt sổ NAV cuối ngày (EOD):
 ```bash
-python3 main.py --optimize <tên-chiến-lược> --ticker <mã-cổ-phiếu>
-# Ví dụ:
-python3 main.py --optimize vsa-momentum --ticker HPG
-```
-Cỗ máy [`tools/strategy_optimizer.py`](tools/strategy_optimizer.py) sẽ:
-* Tự động quét toàn bộ lưới tham số (Grid Search / Bayes Optimization) qua `ParameterOptimizer`.
-* Tìm ra bộ tham số có tỷ suất sinh lời tối ưu và sụt giảm vốn thấp nhất.
-* Nâng cấp chiến lược lên phiên bản **v2.0** và viết bài học kinh nghiệm vào [`.agent/journals/`](.agent/journals/).
-
----
-
-### DÀNH CHO DEVELOPERS / QUANTS MUỐN TỰ TAY VIẾT CODE PYTHON
-
-Nếu bạn muốn tự tay lập trình logic chiến lược thay vì dùng prompt, bạn chỉ cần mở file [`backtest/strategy_template.py`](backtest/strategy_template.py) và viết theo mẫu chuẩn:
-
-```python
-from backtest.strategy_template import BaseFundStrategy, indicator_sma, indicator_rsi
-
-class CustomAlphaStrategy(BaseFundStrategy):
-    # Tham số cấu hình (có thể quét tối ưu hóa tự động)
-    ma_period: int = 20
-    vol_multiplier: float = 1.2
-
-    def init(self):
-        # 1. Đăng ký các chỉ báo kỹ thuật vector hóa bằng Polars
-        self.ma_close = self.I(indicator_sma, length=self.ma_period, ticker="HPG")
-        self.rsi14 = self.I(indicator_rsi, length=14, ticker="HPG")
-
-    def next(self):
-        # 2. Lấy dữ liệu phiên hiện tại (Bảo vệ Zero Look-Ahead Bias)
-        close = self.get_close("HPG")
-        vol = self.get_volume("HPG")
-        ma_val = self.get_indicator(self.ma_close)
-        ml_score = self.get_ml_score("HPG")  # Điểm số Machine Learning (0.00 - 1.00)
-
-        # 3. Quản lý trạng thái vị thế & chu kỳ T+2.5
-        holding_qty = self.get_holding_qty("HPG")
-        sellable_qty = self.get_sellable_qty("HPG")
-
-        # Điều kiện MUA: Vượt MA + Khối lượng xác nhận + ML Score khả quan
-        if holding_qty == 0:
-            if ma_val and close > ma_val and ml_score >= 0.65:
-                # Phân bổ 20% NAV khả dụng (lô chẵn 100)
-                alloc_cash = self.available_cash * 0.20
-                shares = int((alloc_cash / close) // 100) * 100
-                if shares >= 100:
-                    self.buy("HPG", size=shares, note="Breakout + High ML Confidence")
-
-        # Điều kiện BÁN: Đóng vị thế khi giá thủng MA (chỉ bán khi hàng đã về khả dụng)
-        elif sellable_qty > 0:
-            if ma_val and close < ma_val:
-                self.sell("HPG", size=sellable_qty, note="Exit Signal")
-```
-
-Sau khi viết xong, bạn chỉ cần gọi [`tools/strategy_generator.py`](tools/strategy_generator.py) để hệ thống tự động chạy kiểm thử và đóng gói thành Skill:
-```python
-from tools.strategy_generator import StrategySkillPackage
-
-pkg = StrategySkillPackage(strategy_id="custom-alpha", strategy_title="Custom Alpha Strategy")
-pkg.deploy_and_backtest(
-    strategy_class=CustomAlphaStrategy,
-    tickers="HPG",
-    description="Chiến lược giao dịch động lượng kết hợp bộ lọc xác suất ML.",
-    entry_rules="Giá vượt SMA20 và ML Score >= 0.65.",
-    exit_rules="Giá thủng SMA20 sau chu kỳ T+2.5."
-)
+python3 main.py --workflow eod
 ```
 
 ---
 
-## 7. ĐỘNG CƠ TỰ HỌC HỎI & TỐI ƯU HÓA (SELF-HEALING)
+## 7. HỆ THỐNG PHẢN XẠ JEV ENGINE & HARNESS GUARDRAILS
 
-Khi một chiến lược bị CRO từ chối (`REJECTED`) hoặc dính cắt lỗ, hệ thống không bỏ cuộc mà kích hoạt **Vòng lặp Tiến hóa Tự động**:
+### 7.1 Jev Decision Engine (System 1)
+```python
+from tools.jev_decision_engine import JevDecisionEngine
 
+jev = JevDecisionEngine()
+# Phân loại sự kiện nhị phân (<500ms, 0 Token)
+triage = jev.triage_market_event("HPG", intraday_bar={"pct_change": 3.5, "vol_ratio": 1.8})
+# Định tuyến chiến lược vào sổ phù hợp
+book_choice = jev.route_strategy_book("HPG")
+# Chấm điểm rủi ro thực thi [0.0 - 1.0]
+risk_score = jev.score_execution_risk("HPG", "CORE", proposed_volume=5000, proposed_price=28.5)
+```
+
+### 7.2 Harness Guardrail Middleware & Hard Veto
+Mọi đề xuất lệnh trước khi lưu vào sổ cái đều bắt buộc đi qua `GuardrailMiddleware`:
+1. **Kiểm tra Circuit Breaker:** Nếu sụt giảm vốn tuần $\ge 5.0\%$, đóng băng toàn bộ mua mới.
+2. **Kiểm tra Hạn mức Sổ:** Core max 25% NAV, Quant max 15% NAV.
+3. **Bộ lọc Thanh khoản:** Bắt buộc $\text{ADTV}_{20} \ge 10\text{ Tỷ VND}$ và $\text{ADV}_{20} \ge 100.000\text{ CP}$.
+4. **Kiểm soát Tác động Thị trường:** Khối lượng mua không vượt quá **2.0% của $\text{ADV}_{20}$**.
+5. **Kiểm tra Khả dụng T+2.5:** Tuyệt đối cấm bán non khi cổ phiếu chưa về tài khoản.
+6. **Kiểm tra Floor-lock:** Chặn bán hoảng loạn khi cổ phiếu bị dư bán sàn trắng bên mua.
+
+---
+
+## 8. PHÒNG THÍ NGHIỆM CHIẾN LƯỢC & TỰ HỌC (BACKTEST & SELF-HEALING LAB)
+
+### 8.1 Quy Trình Đóng Gói Chiến Lược Thành Agent Skill
+Chiến lược kế thừa từ `BaseFundStrategy` trong `backtest/strategy_template.py`, sử dụng chỉ báo Polars vector hóa.
+Khi thẩm định, Hội đồng CRO áp dụng bộ tiêu chí khắt khe:
+* ✅ Sharpe Ratio $\ge 1.20$
+* ✅ Max Drawdown $\le 15.00\%$
+* ✅ Profit Factor $\ge 1.80$
+* ✅ Tổng số giao dịch kiểm định $\ge 15$ lệnh
+
+### 8.2 Động Cơ Tự Học & Tiến Hóa Sửa Sai (Auto-Healing)
+Khi một chiến lược bị từ chối (`REJECTED`) hoặc dính Stop-loss, hệ thống tự động kích hoạt tiến hóa tham số:
 ```bash
 python3 main.py --optimize vsa-momentum --ticker HPG
 ```
-**Quy trình 4 bước tự động:**
-1. **Chẩn đoán thất bại:** Phân tích nguyên nhân (Thiếu số lượng mẫu lệnh, Bẫy giá giả làm Sharpe âm, hay Thiếu cơ chế cắt lỗ làm sụt giảm vốn sâu).
-2. **Quét không gian tham số:** Tự động kích hoạt `ParameterOptimizer` của `vn-backtest` để tìm kiếm bộ tham số tối ưu (Chu kỳ MA, hệ số Volume, xung lượng RSI).
-3. **Tái đóng gói v2.0:** Tự động nâng cấp mã nguồn, cập nhật lại `status.json` và bảng đối sánh Trước/Sau trong `backtest_report.md`.
-4. **Viết Post-Mortem Memo:** Đúc kết bài học kinh nghiệm và lưu vào thư mục `.agent/journals/`.
+Cỗ máy sẽ:
+1. Chẩn đoán nguyên nhân thất bại định lượng (`diagnose_failure`).
+2. Quét lưới tham số đa chiều (`ParameterOptimizer`).
+3. Tái đóng gói phiên bản **v2.0** với bảng đối sánh Trước/Sau.
+4. Xuất Biên bản Khám nghiệm sai lầm (`post_mortem_*.md`) vào `.agent/journals/`.
 
 ---
 
-## 8. HẠ TẦNG MACHINE LEARNING (UNIVERSAL QUANT ALPHA MODEL)
+## 9. HẠ TẦNG MACHINE LEARNING (UNIVERSAL QUANT ALPHA MODEL)
 
-Hệ thống tích hợp mô hình Machine Learning **Strategy-Agnostic (Không phụ thuộc chiến lược)** và hỗ trợ **Quản lý 100% Trực tiếp trên Web Dashboard (Không cần chạm vào code)**:
-
-> 🌐 **GIAO DIỆN MACHINE LEARNING LAB TRÊN WEB DASHBOARD (`http://localhost:8000`):**
-> * **Hiển thị Lần Cuối Huấn Luyện (Trained At):** Thể hiện rõ ràng ngày giờ huấn luyện model gần nhất, thuật toán và chỉ số ROC-AUC.
-> * **Nút [Trích xuất 15 Đặc trưng]:** Bấm nút để tự động tính toán 15 đặc trưng kỹ thuật & gán nhãn Triple-Barrier từ Parquet.
-> * **Nút [Tải Tệp CSV Về Máy]:** Tải trực tiếp file `ml_dataset_train.csv` về máy tính để upload lên Kaggle chỉ với 1 click.
-> * **Nút [Tải Lên Model (.joblib)]:** Kéo thả hoặc chọn file `.joblib` đã huấn luyện xong trên Kaggle để cập nhật hệ thống ngay lập tức mà không cần khởi động lại server.
-> * **Bảng Xếp Hạng Alpha Toàn Sàn:** Bảng điểm xác suất tăng giá thời gian thực cho từng mã cổ phiếu (HPG, MBB, SSI...).
+* **Thuật toán:** LightGBM Classifier, tối ưu hóa theo phương pháp Walk-Forward Cross-Validation.
+* **Ma trận Đặc trưng:** 15 đặc trưng kỹ thuật phi tuyến tính (RSI, Bollinger Bands, Volatility, Volume Ratio, Price Momentum, MA cross...).
+* **Gán nhãn Triple-Barrier:** Xác định nhãn dựa trên rào cản Lãi mục tiêu, Cắt lỗ và Giới hạn thời gian nắm giữ (5 phiên).
+* **Tốc độ Suy Luận:** `< 0.005 giây/mã`, hỗ trợ chấm điểm Alpha Score hàng loạt cho toàn bộ danh mục VN30.
 
 ---
 
-### Quy Trình Huấn Luyện Thủ Công Qua Dòng Lệnh (Nếu Cần):
-1. **Trích xuất 15 Đặc trưng Kỹ thuật & Gán nhãn Triple-Barrier:**
-   ```bash
-   python3 tools/ml_feature_extractor.py --output data/ml_dataset_train.parquet --csv
-   ```
-2. **Huấn luyện Mô hình trên Kaggle / Google Colab (Miễn phí):**
-   * Mở Notebook [`notebooks/kaggle_train_lightgbm.ipynb`](notebooks/kaggle_train_lightgbm.ipynb) trên Kaggle và bấm **Run All**.
-   * Tải tệp mô hình `universal_alpha_model.joblib` về và upload lên Dashboard hoặc thả vào thư mục `models/`.
-3. **Suy Luận & Chấm Điểm Alpha Score (< 0.005s):**
-   ```bash
-   python3 tools/ml_predictor.py
-   ```
-Hoặc trong code chiến lược:
-```python
-ml_score = self.get_ml_score("HPG")  # Trả về điểm số từ 0.00 đến 1.00
-```
+## 10. KHỞI CHẠY WEB DASHBOARD & DOCKER COMPOSE
 
----
-
-## 9. KHỞI CHẠY WEB DASHBOARD & DOCKER COMPOSE
-
-### Khởi chạy Dashboard trực tiếp:
+Khởi chạy máy chủ Dashboard:
 ```bash
 python3 main.py --serve-dashboard
 ```
 Mở trình duyệt truy cập: **`http://localhost:8000`**
-* **Nút [Đồng Bộ Giá BigQuery]:** Cập nhật giá đóng cửa thực tế mới nhất từ BigQuery chỉ với 1 click.
+
+Các tính năng nổi bật trên Web Dashboard:
+* **Nút [Đồng Bộ Giá BigQuery]:** Cập nhật giá đóng cửa EOD mới nhất từ Google BigQuery chỉ với 1 click.
 * **Bộ Lọc Đa Tài Khoản (Account Pills):** Chuyển đổi linh hoạt giữa Toàn quỹ (`ALL`), Tài khoản hiện hành (`0001716319`), hoặc các tài khoản cũ (`009C105992`, `127008`).
-* **Tổng quan Tài sản (Overview Cards):**
-  - **NAV:** Tổng tài sản ròng chuẩn hóa Mark-to-Market.
-  - **Biến Động Trong Ngày (Daily PnL):** So sánh chuẩn xác giữa phiên $T$ và phiên $T-1$ theo nến BigQuery.
-  - **Lợi Nhuận Lũy Kế:** Bóc tách minh bạch Lãi đã chốt tiền mặt (Realized) và Lãi/lỗ tạm tính (Unrealized) kèm ghi chú FLC treo sàn.
-* **Danh mục Nắm giữ:** Tỷ trọng từng mã, giá vốn bình quân (2 chữ số thập phân), thị giá thực tế và badge nhận diện cổ phiếu ngừng giao dịch.
-* **Đường Cong Vốn Thực Tế (Equity Curve):** 4 thẻ số liệu vốn kế toán chuẩn mực (Vốn gốc đang gửi, NAV, Lợi nhuận toàn lịch sử, Tỷ suất sinh lời thực tế) — loại bỏ hoàn toàn con số giả định.
-* **Phòng Thí Nghiệm Machine Learning:** Xem ngày giờ huấn luyện, trích xuất 15 đặc trưng, tải dataset CSV về máy và tải lên file model `.joblib` huấn luyện từ Kaggle.
-* **Sổ Lệnh Điện Tử & Form Nhập Lệnh Khớp:** Ghi nhận lệnh bù tức thì vào sổ cái kế toán.
+* **Thẻ Tổng Quan Tài Sản:** NAV chuẩn hóa Mark-to-Market, Daily PnL, Lợi nhuận lũy kế bóc tách Realized / Unrealized.
+* **Machine Learning Studio:** Trích xuất 15 đặc trưng, tải dataset CSV, tải lên mô hình `.joblib` đã huấn luyện từ Kaggle/Colab.
+* **Báo cáo Chiến lược:** Xem biểu đồ đường cong vốn Plotly HTML tương tác trực quan.
 
 ---
 
-## 10. HỆ THỐNG KẾ TOÁN QUỸ & QUẢN TRỊ ĐA TÀI KHOẢN (HISTORICAL VAULT)
+## 11. HỆ THỐNG KẾ TOÁN QUỸ & QUẢN TRỊ ĐA TÀI KHOẢN (HISTORICAL VAULT)
 
-Hệ thống quản lý nguồn vốn thực tế thông qua việc tái hiện (Replay) **1.710 giao dịch lịch sử từ 16/06/2016 đến nay** qua 4 tài khoản CTCK (`0001716319`, `009C105992`, `127008`, `123C006116`), độc lập hóa 100% bằng code toán học chuẩn xác:
+Hệ thống quản lý nguồn vốn thực tế thông qua việc tái hiện (**Replay**) **1.710 giao dịch lịch sử từ 16/06/2016 đến nay** qua 4 tài khoản CTCK:
+* **Giá vốn bình quân (WAC):** Tự động gộp phí mua vào giá vốn, khấu trừ cổ tức tiền mặt, điều chỉnh pha loãng cổ phiếu thưởng kèm thuế TNCN 5% theo Nghị định 126/2020/NĐ-CP.
+* **Nguyên tắc Vốn Gốc Không Âm:** Phân tách rạch ròi giữa Thu hồi vốn gốc (Return of Capital) và Rút lợi nhuận về tài khoản ngân hàng (Profit Distribution).
+* **Quy tắc Thận trọng cho Cổ phiếu Treo Sàn:** Cổ phiếu bị đình chỉ/hủy niêm yết (như `FLC`) được tự động định giá thị giá = **`0,00 đ`**, bảo toàn sự trung thực tuyệt đối của NAV thật.
 
-### 1. Công thức Kế toán Chuẩn mực:
-* **Giá vốn bình quân (`Avg Price`):**
-  * *Khi Mua:* Gộp phí mua vào giá vốn:
-    $$\text{Avg Price}_{mới} = \frac{(Q_{cũ} \times \text{Avg Price}_{cũ}) + (Q_{mua} \times P_{mua}) + \text{Phí}_{mua}}{Q_{cũ} + Q_{mua}}$$
-  * *Khi nhận Cổ tức Tiền mặt:* Khấu trừ trực tiếp vào giá vốn:
-    $$\text{Avg Price}_{mới} = \frac{(Q_{cũ} \times \text{Avg Price}_{cũ}) - \text{Tổng tiền cổ tức}}{Q_{cũ}}$$
-  * *Khi nhận Cổ tức Cổ phiếu / Cổ phiếu thưởng:* Pha loãng giá vốn. Đặc biệt từ **05/12/2020** (Nghị định 126/2020/NĐ-CP), tính thêm thuế TNCN 5% trên mệnh giá 10.000 đ/CP:
-    $$\text{Avg Price}_{mới} = \frac{(Q_{cũ} \times \text{Avg Price}_{cũ}) + (Q_{thưởng} \times 10.000 \times 5\%)}{Q_{cũ} + Q_{thưởng}}$$
-* **Lãi/Lỗ Thực Hiện (`Profit` & `Profit Percent`):**
-  $$\text{Profit} = \text{Tổng tiền thực nhận (đã trừ phí, thuế)} - (|Q_{bán}| \times \text{Avg Price}_{cũ})$$
-  $$\text{Profit Percent} = \frac{\text{Profit}}{|Q_{bán}| \times \text{Avg Price}_{cũ}}$$
-
-### 2. Quy Tắc Thận Trọng Cho Cổ Phiếu Treo Sàn (Suspended Stocks):
-* Đối với các mã bị đình chỉ giao dịch / hủy niêm yết (như **FLC**: 12.700 CP ở TK `009C105992` và 12.700 CP ở TK `127008`):
-  * Hệ thống tự động định giá thị giá = **`0,00 đ`** (0% tỷ trọng trong NAV).
-  * Giúp bảo toàn tính thanh khoản và sự chính xác của NAV thật (`217.026.062 đ` thay vì bị thổi phồng ảo lên 382 triệu).
-
-### 3. Mô Hình Vốn Gốc Quản Trị Chuẩn & Nguyên Lý Vốn Gốc Không Âm:
-* **Nguyên tắc thu hồi vốn gốc (Return of Capital):** Khi rút tiền, số tiền rút sẽ trừ dần vào vốn gốc đã nộp cho đến khi vốn gốc về `0 đ`.
-* **Rút lợi nhuận (Profit Distribution):** Khi vốn gốc đã về `0 đ`, nếu rút tiếp thì khoản tiền đó được ghi nhận chuẩn xác là **Tiền lãi đã rút về ngân hàng** (`profit_withdrawn`), vốn gốc **KHÔNG BAO GIỜ BỊ ÂM**.
-* **Tái tạo chu kỳ vốn mới:** Khi nộp thêm tiền sau đó, số tiền nộp mới sẽ khởi tạo lại chu kỳ vốn gốc mới.
-* **Bảng tổng hợp nguồn vốn qua 1.710 giao dịch:**
-  * **Tổng nộp vào:** `1.584.347.696 đ` (qua 59 lần nộp)
-  * **Tổng rút ra:** `1.399.046.954 đ` (qua 40 lần rút)
-  * **Vốn gốc đang đầu tư (Active Capital):** **`252.273.370 đ`** (`0001716319`: 100.77M, `127008`: 151.5M, `009C105992`: 0đ, `123C006116`: 0đ).
-  * **Tiền lãi đã rút về ngân hàng (Profit Withdrawn):** **`+66.972.628 đ`** (`009C105992`: 65.66M, `123C006116`: 1.31M).
-  * **Tổng lợi nhuận thực nhận toàn bộ lịch sử:**
-    $$\text{Net Profit} = (\text{NAV} - \text{Active Capital}) + \text{Profit Withdrawn} = \mathbf{+31.725.320 \text{ đ}}$$
-
-### 4. Lệnh Nạp / Tái Hiện Kế Toán:
+Lệnh nạp/tái hiện lịch sử:
 ```bash
 python3 tools/transaction_importer.py
 ```
-* **Kết quả tài khoản hiện hành (`0001716319`):** Tiền mặt: **326.812 VND**; Cổ phiếu: **FPT** (1.560 CP), **HPG** (2.000 CP), **MBS** (3.000 CP), **SHS** (3.000 CP), **SSI** (405 CP).
-* **Các tài khoản cũ:** Số dư tiền mặt đã cân bằng chuẩn xác về **0 VND**.
 
 ---
 
-## 11. BỘ KIỂM THỬ HỆ THỐNG (TEST SUITES)
+## 12. BỘ KIỂM THỬ HỆ THỐNG (TEST SUITES - 54 TESTS)
 
-Dự án đi kèm 6 bộ kiểm thử tự động toàn diện. Chạy toàn bộ test chỉ với 1 câu lệnh:
+Hệ thống sở hữu bộ kiểm thử tự động toàn diện gồm **9 test suites với 54 bài test** bao phủ 100% các phân hệ nghiệp vụ.
 
+Chạy toàn bộ test suites chỉ với 1 câu lệnh duy nhất:
 ```bash
-python3 tests/test_historical_accounting.py && \
-python3 tests/test_phase1.py && \
-python3 tests/test_phase2.py && \
-python3 tests/test_phase3.py && \
-python3 tests/test_evolution.py && \
-python3 tests/test_ml_pipeline.py
+PYTHONPATH=. pytest
 ```
 
-| Bộ Kiểm Thử | Tệp Kiểm Thử | Nội Dung Xác Minh |
-| :--- | :--- | :--- |
-| **Kế toán Quỹ** | [`tests/test_historical_accounting.py`](tests/test_historical_accounting.py) | Replay 1.710 GD, số dư tiền mặt 4 tài khoản, danh mục thực tế (FPT, HPG, MBS, SHS, SSI), cổ tức tiền/cổ phiếu NĐ 126. |
-| **Giai đoạn 1** | [`tests/test_phase1.py`](tests/test_phase1.py) | CSDL SQLite, nạp dữ liệu Parquet, khớp lệnh mua/bán, tính thuế phí và chốt sổ NAV Mark-to-Market. |
-| **Giai đoạn 2** | [`tests/test_phase2.py`](tests/test_phase2.py) | Động cơ `vn-backtest`, quy tắc $T+2.5$, lô chẵn 100, tạo Skill và xuất biểu đồ Plotly HTML. |
-| **Giai đoạn 3** | [`tests/test_phase3.py`](tests/test_phase3.py) | Định dạng tin nhắn Telegram 2 chiều Bull/Bear, bóc tách regex `/fill`, và các REST API của Dashboard. |
-| **Tiến hóa AI** | [`tests/test_evolution.py`](tests/test_evolution.py) | Chẩn đoán nguyên nhân thất bại, tối ưu hóa tham số `ParameterOptimizer`, cập nhật báo cáo và viết Post-Mortem Memo. |
-| **Machine Learning**| [`tests/test_ml_pipeline.py`](tests/test_ml_pipeline.py) | Trích xuất 15 đặc trưng, gán nhãn 3 rào cản, huấn luyện LightGBM, dự báo <0.005s và API xếp hạng Alpha. |
+| Bộ Kiểm Thử | Tệp Test | Số Test | Nội Dung Xác Minh |
+| :--- | :--- | :---: | :--- |
+| **Dual-Book & Hội Đồng** | `tests/test_dual_book_committee.py` | 18 | Phân định Sổ CORE vs QUANT, tỷ trọng danh mục, quy chế tranh biện Bull/Bear, quyền VETO của CRO. |
+| **Phản Xạ Jev & Harness** | `tests/test_harness_and_jev.py` | 12 | Primitive Noul, Choice, Score, Guardrail Middleware Hard Veto, Verification Loop & Auto-Healing. |
+| **Quản Trị Rủi Ro Chuyên Sâu** | `tests/test_risk_refinements.py` | 8 | Sụt giảm vốn tuần 5%, thanh khoản ADTV20 $\ge$ 10 tỷ, trần tỷ lệ tham gia thị trường 2% ADV, bẫy floor-lock. |
+| **Machine Learning Pipeline** | `tests/test_ml_pipeline.py` | 6 | Trích xuất 15 đặc trưng, gán nhãn 3 rào cản, huấn luyện LightGBM, Walk-Forward Validation, Alpha Score. |
+| **Kế Toán Quỹ Lịch Sử** | `tests/test_historical_accounting.py`| 4 | Replay 1.710 giao dịch lịch sử, cân bằng số dư 4 tài khoản, cổ tức NĐ 126, vốn gốc không âm. |
+| **Tiến Hóa & Tự Học** | `tests/test_evolution.py` | 3 | Chẩn đoán nguyên nhân thất bại, quét lưới ParameterOptimizer, tự khắc phục chiến lược v2.0. |
+| **Cơ Sở Dữ Liệu SQLite** | `tests/test_phase1.py` | 1 | Khởi tạo schema 6 bảng, nạp Parquet, khớp lệnh mua/bán, tính thuế phí và chốt sổ NAV daily. |
+| **Động Cơ vn-backtest** | `tests/test_phase2.py` | 1 | Kiểm định chu kỳ T+2.5, bước giá trần/sàn, lô chẵn 100, tạo Skill và xuất biểu đồ Plotly HTML. |
+| **Giao Tiếp & Dashboard API** | `tests/test_phase3.py` | 1 | Tin nhắn Telegram 2 chiều Bull/Bear, bóc tách regex `/fill`, và các REST API của Dashboard. |
 
 ---
 
-🏛️ **Hệ thống Quỹ Đầu tư AI sẵn sàng vận hành an toàn, minh bạch và hoàn toàn tự chủ!**
+🏛️ **Hệ thống Quỹ Đầu tư AI sẵn sàng vận hành an toàn, minh bạch, kỷ luật thép và hoàn toàn tự chủ!**

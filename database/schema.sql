@@ -166,6 +166,28 @@ CREATE TABLE IF NOT EXISTS decision_memos (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 10. BẢNG DỮ LIỆU TÀI CHÍNH CƠ BẢN DOANH NGHIỆP (COMPANY FUNDAMENTALS)
+CREATE TABLE IF NOT EXISTS company_fundamentals (
+    ticker TEXT NOT NULL,                      -- Mã cổ phiếu (HPG, FPT, VCB...)
+    period TEXT NOT NULL,                      -- Kỳ báo cáo (ví dụ: 2026Q3, 2026Q2)
+    year INTEGER NOT NULL,                     -- Năm tài chính
+    quarter INTEGER NOT NULL,                  -- Quý tài chính (1, 2, 3, 4)
+    revenue_growth_yoy REAL DEFAULT 0.0,       -- Tăng trưởng doanh thu YoY (%)
+    profit_growth_yoy REAL DEFAULT 0.0,        -- Tăng trưởng LNST YoY (%)
+    roe REAL DEFAULT 0.0,                      -- Tỷ suất sinh lời trên VCSH ROE (%)
+    gross_margin REAL DEFAULT 0.0,             -- Biên lợi nhuận gộp (%)
+    debt_to_equity REAL DEFAULT 0.0,           -- Tỷ lệ Nợ vay / Vốn chủ sở hữu (D/E)
+    ocf_to_net_income REAL DEFAULT 1.0,        -- Tỷ lệ Dòng tiền OCF / Lợi nhuận sau thuế
+    pe REAL DEFAULT 15.0,                      -- P/E trailing
+    pb REAL DEFAULT 1.5,                       -- P/B hiện hành
+    pe_5y_median REAL DEFAULT 15.0,            -- P/E trung vị 5 năm
+    piotroski_f_score INTEGER DEFAULT 6,       -- Điểm chất lượng BCTC Piotroski (0-9)
+    altman_z_score REAL DEFAULT 2.6,           -- Chỉ số cảnh báo phá sản Altman Z-Score
+    notes TEXT,                                -- Ghi chú phân tích / Sự kiện bất thường
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (ticker, period)
+);
+
 -- CHỈ MỤC TỐI ƯU TỐC ĐỘ TRUY VẤN
 CREATE INDEX IF NOT EXISTS idx_trans_acc ON transactions(account);
 CREATE INDEX IF NOT EXISTS idx_trans_sym ON transactions(symbol);
@@ -177,3 +199,4 @@ CREATE INDEX IF NOT EXISTS idx_order_date ON order_history(trade_date);
 CREATE INDEX IF NOT EXISTS idx_order_status ON order_history(status);
 CREATE INDEX IF NOT EXISTS idx_corp_ticker ON corporate_actions(ticker);
 CREATE INDEX IF NOT EXISTS idx_nav_date ON nav_daily(trade_date);
+CREATE INDEX IF NOT EXISTS idx_fund_ticker ON company_fundamentals(ticker);

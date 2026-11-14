@@ -1,3 +1,8 @@
+---
+name: valuation-dcf
+description: Kỹ năng định giá doanh nghiệp và chiết khấu dòng tiền (Valuation & DCF) dành cho FA Analyst và Hội đồng Đầu tư AI.
+---
+
 # KỸ NĂNG ĐỊNH GIÁ DOANH NGHIỆP & CHIẾT KHẤU DÒNG TIỀN (VALUATION & DCF)
 
 Kỹ năng chuyên sâu dành cho **FA Analyst** và **Hội đồng Đầu tư AI** phục vụ thẩm định Sổ Chiến Lược **CORE (Fundamental Trung & Dài Hạn)**:

@@ -144,5 +144,8 @@ def run_tests():
     print("🎉 TOÀN BỘ CÁC BÀI TEST GIAI ĐOẠN 1 ĐỀU THÀNH CÔNG RỰC RỠ!")
     print("=" * 70)
 
+def test_phase1_suite():
+    run_tests()
+
 if __name__ == "__main__":
     run_tests()

@@ -5,7 +5,7 @@ Thực thi các nghiệp vụ Kế toán Quỹ Đa Tài khoản, Sổ lệnh, Da
 
 import sqlite3
 import json
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from config import settings
@@ -106,6 +106,33 @@ class DatabaseManager:
                     conn.execute("ALTER TABLE decision_memos ADD COLUMN cio_decision TEXT;")
                 if "status" not in memo_cols:
                     conn.execute("ALTER TABLE decision_memos ADD COLUMN status TEXT DEFAULT 'PROPOSED';")
+                if "jev_telemetry" not in memo_cols:
+                    conn.execute("ALTER TABLE decision_memos ADD COLUMN jev_telemetry TEXT;")
+
+            # 5. Bảng company_fundamentals: tạo nếu chưa tồn tại
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS company_fundamentals (
+                    ticker TEXT NOT NULL,
+                    period TEXT NOT NULL,
+                    year INTEGER NOT NULL,
+                    quarter INTEGER NOT NULL,
+                    revenue_growth_yoy REAL DEFAULT 0.0,
+                    profit_growth_yoy REAL DEFAULT 0.0,
+                    roe REAL DEFAULT 0.0,
+                    gross_margin REAL DEFAULT 0.0,
+                    debt_to_equity REAL DEFAULT 0.0,
+                    ocf_to_net_income REAL DEFAULT 1.0,
+                    pe REAL DEFAULT 15.0,
+                    pb REAL DEFAULT 1.5,
+                    pe_5y_median REAL DEFAULT 15.0,
+                    piotroski_f_score INTEGER DEFAULT 6,
+                    altman_z_score REAL DEFAULT 2.6,
+                    notes TEXT,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (ticker, period)
+                );
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_fund_ticker ON company_fundamentals(ticker);")
 
             conn.commit()
 
@@ -187,8 +214,129 @@ class DatabaseManager:
                 return float(row_nav["cash_balance"])
             return settings.INITIAL_CAPITAL
 
+    def calculate_available_shares(
+        self,
+        ticker: str,
+        account: str = "0001716319",
+        strategy_book: Optional[str] = None,
+        as_of_date: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Tính toán số lượng cổ phiếu khả dụng để bán theo đúng quy chế T+2.5 của sàn Việt Nam (VSD).
+        - Ngày T mua: T+0 (chưa về).
+        - Ngày T+1: T+1 (chưa về).
+        - Ngày T+2: Cổ phiếu về chiều T+2 (sau 13:00) / sẵn sàng giao dịch (trading_days >= 2).
+        - Cuối tuần (thứ 7, CN) không tính là ngày giao dịch.
+        """
+        t = ticker.upper()
+        as_of_str = as_of_date or date.today().strftime("%Y-%m-%d")
+        try:
+            as_of_dt = datetime.strptime(as_of_str, "%Y-%m-%d").date()
+        except Exception:
+            as_of_dt = date.today()
+
+        with self.get_connection() as conn:
+            pf_query = "SELECT quantity, first_bought_date FROM portfolio WHERE account = ? AND ticker = ?"
+            pf_params = [account, t]
+            if strategy_book and strategy_book != "ALL":
+                pf_query += " AND strategy_book = ?"
+                pf_params.append(strategy_book.upper())
+            pf_rows = conn.execute(pf_query, tuple(pf_params)).fetchall()
+            current_portfolio_qty = sum(float(r["quantity"]) for r in pf_rows)
+
+            if current_portfolio_qty <= 0:
+                return {
+                    "ticker": t,
+                    "account": account,
+                    "strategy_book": strategy_book,
+                    "total_quantity": 0.0,
+                    "available_quantity": 0.0,
+                    "pending_settlement_quantity": 0.0,
+                    "settled_lots": [],
+                    "pending_lots": []
+                }
+
+            tx_rows = conn.execute("""
+                SELECT trade_date, type, quantity, comment
+                FROM transactions
+                WHERE account = ? AND symbol = ? AND trade_date <= ?
+                ORDER BY trade_date ASC, id ASC;
+            """, (account, t, as_of_str)).fetchall()
+
+            lots = []
+            for tx in tx_rows:
+                tx_type = str(tx["type"]).upper()
+                q = float(tx["quantity"])
+                t_date = str(tx["trade_date"])
+                
+                if q > 0 or "MUA" in tx_type or "BUY" in tx_type:
+                    buy_qty = abs(q)
+                    lots.append({"date": t_date, "qty": buy_qty})
+                elif q < 0 or "BÁN" in tx_type or "SELL" in tx_type:
+                    sell_qty = abs(q)
+                    while sell_qty > 0 and lots:
+                        if lots[0]["qty"] <= sell_qty:
+                            sell_qty -= lots[0]["qty"]
+                            lots.pop(0)
+                        else:
+                            lots[0]["qty"] -= sell_qty
+                            sell_qty = 0
+
+            if not lots and current_portfolio_qty > 0:
+                first_date = pf_rows[0]["first_bought_date"] or as_of_str
+                lots.append({"date": first_date, "qty": current_portfolio_qty})
+
+            settled_lots = []
+            pending_lots = []
+            available_qty = 0.0
+            pending_qty = 0.0
+
+            for lot in lots:
+                try:
+                    lot_dt = datetime.strptime(lot["date"], "%Y-%m-%d").date()
+                except Exception:
+                    lot_dt = as_of_dt
+
+                trading_days = 0
+                curr = lot_dt + timedelta(days=1)
+                while curr <= as_of_dt:
+                    if curr.weekday() < 5:
+                        trading_days += 1
+                    curr += timedelta(days=1)
+
+                lot_info = {
+                    "buy_date": lot["date"],
+                    "quantity": lot["qty"],
+                    "trading_days": trading_days,
+                    "status": "SETTLED" if trading_days >= 2 else f"T+{trading_days}"
+                }
+
+                if trading_days >= 2:
+                    available_qty += lot["qty"]
+                    settled_lots.append(lot_info)
+                else:
+                    pending_qty += lot["qty"]
+                    pending_lots.append(lot_info)
+
+            total_sum = available_qty + pending_qty
+            if total_sum > 0 and total_sum != current_portfolio_qty:
+                scale = current_portfolio_qty / total_sum
+                available_qty = round(available_qty * scale)
+                pending_qty = current_portfolio_qty - available_qty
+
+            return {
+                "ticker": t,
+                "account": account,
+                "strategy_book": strategy_book,
+                "total_quantity": current_portfolio_qty,
+                "available_quantity": available_qty,
+                "pending_settlement_quantity": pending_qty,
+                "settled_lots": settled_lots,
+                "pending_lots": pending_lots
+            }
+
     def get_portfolio(self, account: Optional[str] = None, strategy_book: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Lấy danh mục cổ phiếu đang nắm giữ (hỗ trợ lọc theo tài khoản và sổ chiến lược CORE/QUANT)"""
+        """Lấy danh mục cổ phiếu đang nắm giữ (hỗ trợ lọc theo tài khoản, sổ chiến lược CORE/QUANT và tính khả dụng T+2.5)"""
         with self.get_connection() as conn:
             query = """
                 SELECT account, ticker, strategy_book, quantity, avg_buy_price, current_price, market_value,
@@ -210,7 +358,18 @@ class DatabaseManager:
                 query += " ORDER BY (account = '0001716319') DESC, market_value DESC;"
 
             rows = conn.execute(query, tuple(params)).fetchall()
-            return [dict(row) for row in rows]
+            results = []
+            for row in rows:
+                item = dict(row)
+                avail_info = self.calculate_available_shares(
+                    ticker=item["ticker"],
+                    account=item["account"],
+                    strategy_book=item["strategy_book"]
+                )
+                item["available_quantity"] = avail_info.get("available_quantity", item["quantity"])
+                item["pending_settlement_quantity"] = avail_info.get("pending_settlement_quantity", 0)
+                results.append(item)
+            return results
 
 
     def get_broker_accounts(self) -> List[Dict[str, Any]]:
@@ -259,11 +418,24 @@ class DatabaseManager:
         account: str = "0001716319",
         strategy_book: str = "QUANT"
     ) -> str:
-        """AI tạo lệnh đề xuất gửi Telegram cho Bạn"""
+        """AI tạo lệnh đề xuất gửi Telegram cho Bạn (có kiểm tra quy chế khả dụng T+2.5 khi BÁN)"""
         norm_proposed_price = proposed_price * 1000.0 if proposed_price < 1000.0 else proposed_price
         t_date = trade_date or date.today().strftime("%Y-%m-%d")
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S%f')}-{ticker}"
+
+        # Kiểm tra kiểm soát T+2.5 khi ra lệnh BÁN
+        if action.upper() == "SELL":
+            avail_info = self.calculate_available_shares(
+                ticker=ticker.upper(), account=account, strategy_book=strategy_book.upper(), as_of_date=t_date
+            )
+            avail_qty = avail_info.get("available_quantity", 0)
+            if proposed_volume > avail_qty:
+                raise ValueError(
+                    f"CRO VETO [T+2.5 SETTLEMENT]: Không thể tạo lệnh BÁN {proposed_volume:,} CP {ticker.upper()}. "
+                    f"Số lượng khả dụng giao dịch chỉ có: {avail_qty:,} CP. "
+                    f"Số lượng đang chờ về T+2.5: {avail_info.get('pending_settlement_quantity', 0):,} CP."
+                )
 
         with self.get_connection() as conn:
             conn.execute("""
@@ -363,11 +535,22 @@ class DatabaseManager:
         account: str = "0001716319",
         strategy_book: str = "QUANT"
     ) -> str:
-        """Cơ chế Nhập bù trực tiếp: Nhập bù lệnh khớp từ app CTCK"""
+        """Cơ chế Nhập bù trực tiếp: Nhập bù lệnh khớp từ app CTCK (kiểm tra khả dụng T+2.5 khi BÁN)"""
         norm_executed_price = executed_price * 1000.0 if executed_price < 1000.0 else executed_price
         t_date = trade_date or date.today().strftime("%Y-%m-%d")
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         order_id = f"FILL-{datetime.now().strftime('%Y%m%d%H%M%S%f')}-{ticker.upper()}"
+
+        if action.upper() == "SELL":
+            avail_info = self.calculate_available_shares(
+                ticker=ticker.upper(), account=account, strategy_book=strategy_book.upper(), as_of_date=t_date
+            )
+            avail_qty = avail_info.get("available_quantity", 0)
+            if executed_volume > avail_qty:
+                raise ValueError(
+                    f"CRO VETO [T+2.5 SETTLEMENT]: Không thể khớp lệnh BÁN {executed_volume:,} CP {ticker.upper()}. "
+                    f"Số lượng khả dụng giao dịch chỉ có: {avail_qty:,} CP (chờ về T+2.5: {avail_info.get('pending_settlement_quantity', 0):,} CP)."
+                )
 
         with self.get_connection() as conn:
             acc_row = conn.execute("SELECT fee_rate FROM broker_accounts WHERE account_id = ?;", (account,)).fetchone()
@@ -841,39 +1024,69 @@ class DatabaseManager:
             return str(val) if val is not None else ""
 
         with self.get_connection() as conn:
-            conn.execute("""
-                INSERT OR REPLACE INTO decision_memos (
-                    memo_id, ticker, strategy_book, trade_date, action, target_price, stop_loss_price,
-                    target_volume, macro_view, fa_summary, ta_ml_summary, bull_arguments,
-                    bear_arguments, cro_verdict, cro_position_size, cio_decision, status, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-            """, (
-                memo_id,
-                memo_data.get("ticker", "").upper(),
-                memo_data.get("strategy_book", "QUANT").upper(),
-                trade_date,
-                memo_data.get("action", "BUY").upper(),
-                float(memo_data.get("target_price", 0.0)),
-                float(memo_data.get("stop_loss_price", 0.0)),
-                int(memo_data.get("target_volume", 0)),
-                _stringify(memo_data.get("macro_view", "")),
-                _stringify(memo_data.get("fa_summary", "")),
-                _stringify(memo_data.get("ta_ml_summary", "")),
-                _stringify(memo_data.get("bull_arguments", "")),
-                _stringify(memo_data.get("bear_arguments", "")),
-                _stringify(memo_data.get("cro_verdict", "APPROVED")),
-                float(memo_data.get("cro_position_size", 0.0)),
-                _stringify(memo_data.get("cio_decision", "")),
-                memo_data.get("status", "PROPOSED"),
-                now_str
-            ))
+            cols = [r["name"] for r in conn.execute("PRAGMA table_info(decision_memos);").fetchall()]
+            if "jev_telemetry" in cols:
+                conn.execute("""
+                    INSERT OR REPLACE INTO decision_memos (
+                        memo_id, ticker, strategy_book, trade_date, action, target_price, stop_loss_price,
+                        target_volume, macro_view, fa_summary, ta_ml_summary, bull_arguments,
+                        bear_arguments, cro_verdict, cro_position_size, cio_decision, status, jev_telemetry, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """, (
+                    memo_id,
+                    memo_data.get("ticker", "").upper(),
+                    memo_data.get("strategy_book", "QUANT").upper(),
+                    trade_date,
+                    memo_data.get("action", "BUY").upper(),
+                    float(memo_data.get("target_price", 0.0)),
+                    float(memo_data.get("stop_loss_price", 0.0)),
+                    int(memo_data.get("target_volume", 0)),
+                    _stringify(memo_data.get("macro_view", "")),
+                    _stringify(memo_data.get("fa_summary", "")),
+                    _stringify(memo_data.get("ta_ml_summary", "")),
+                    _stringify(memo_data.get("bull_arguments", "")),
+                    _stringify(memo_data.get("bear_arguments", "")),
+                    _stringify(memo_data.get("cro_verdict", "APPROVED")),
+                    float(memo_data.get("cro_position_size", 0.0)),
+                    _stringify(memo_data.get("cio_decision", "")),
+                    memo_data.get("status", "PROPOSED"),
+                    _stringify(memo_data.get("jev_telemetry", {})),
+                    now_str
+                ))
+            else:
+                conn.execute("""
+                    INSERT OR REPLACE INTO decision_memos (
+                        memo_id, ticker, strategy_book, trade_date, action, target_price, stop_loss_price,
+                        target_volume, macro_view, fa_summary, ta_ml_summary, bull_arguments,
+                        bear_arguments, cro_verdict, cro_position_size, cio_decision, status, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """, (
+                    memo_id,
+                    memo_data.get("ticker", "").upper(),
+                    memo_data.get("strategy_book", "QUANT").upper(),
+                    trade_date,
+                    memo_data.get("action", "BUY").upper(),
+                    float(memo_data.get("target_price", 0.0)),
+                    float(memo_data.get("stop_loss_price", 0.0)),
+                    int(memo_data.get("target_volume", 0)),
+                    _stringify(memo_data.get("macro_view", "")),
+                    _stringify(memo_data.get("fa_summary", "")),
+                    _stringify(memo_data.get("ta_ml_summary", "")),
+                    _stringify(memo_data.get("bull_arguments", "")),
+                    _stringify(memo_data.get("bear_arguments", "")),
+                    _stringify(memo_data.get("cro_verdict", "APPROVED")),
+                    float(memo_data.get("cro_position_size", 0.0)),
+                    _stringify(memo_data.get("cio_decision", "")),
+                    memo_data.get("status", "PROPOSED"),
+                    now_str
+                ))
             conn.commit()
         return memo_id
 
     @staticmethod
     def _parse_memo_row(r) -> Dict[str, Any]:
         d = dict(r)
-        json_cols = ['macro_view', 'fa_summary', 'ta_ml_summary', 'bull_arguments', 'bear_arguments', 'cro_verdict', 'cio_decision']
+        json_cols = ['macro_view', 'fa_summary', 'ta_ml_summary', 'bull_arguments', 'bear_arguments', 'cro_verdict', 'cio_decision', 'jev_telemetry']
         for c in json_cols:
             val = d.get(c)
             if isinstance(val, str) and (val.strip().startswith('{') or val.strip().startswith('[')):
@@ -917,3 +1130,262 @@ class DatabaseManager:
                 """, (order_status, memo_id))
             conn.commit()
             return True
+
+    def record_corporate_action(
+        self,
+        ticker: str,
+        action_type: str,  # 'CASH_DIVIDEND', 'STOCK_DIVIDEND', 'BONUS_SHARES', 'RIGHT_ISSUE'
+        ex_date: str,
+        account: str = "0001716319",
+        strategy_book: Optional[str] = None,
+        cash_amount_per_share: float = 0.0,
+        ratio: float = 0.0,
+        tax_rate: float = 0.05,
+        record_date: Optional[str] = None,
+        payment_date: Optional[str] = None,
+        notes: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Nghiệp vụ Hạch toán Sự kiện Doanh nghiệp & Quyền Cổ tức (Corporate Actions):
+        1. CỔ TỨC TIỀN MẶT ('CASH_DIVIDEND'):
+           - Tiền nhận gộp = Khối lượng nắm giữ * cash_amount_per_share
+           - Thuế TNCN cổ tức tiền = Tiền nhận gộp * 5% (tax_rate)
+           - Tiền thực nhận vào số dư = Tiền nhận gộp - Thuế
+           - Tăng số dư tiền mặt tài khoản (account_cash_balance)
+           - Ghi sổ nhật ký giao dịch (transactions: type='Cổ tức tiền')
+        2. CỔ TỨC CỔ PHIẾU / CỔ PHIẾU THƯỞNG ('STOCK_DIVIDEND', 'BONUS_SHARES'):
+           - Số lượng cổ phiếu thưởng = int(Khối lượng cũ * ratio)
+           - Khối lượng mới = Khối lượng cũ + Số lượng thưởng
+           - Giá vốn bình quân pha loãng = (Khối lượng cũ * Giá vốn cũ) / Khối lượng mới
+           - Cập nhật danh mục portfolio với giá vốn mới
+           - Ghi sổ nhật ký giao dịch (transactions: type='Cổ tức CP')
+        3. Lưu vết vĩnh viễn vào bảng corporate_actions với trạng thái 'APPLIED'
+        """
+        t = ticker.upper()
+        act = action_type.upper()
+        p_date = payment_date or ex_date
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        with self.get_connection() as conn:
+            query_pf = "SELECT * FROM portfolio WHERE ticker = ? AND quantity > 0"
+            params_pf = [t]
+            if account:
+                query_pf += " AND account = ?"
+                params_pf.append(account)
+            if strategy_book:
+                query_pf += " AND strategy_book = ?"
+                params_pf.append(strategy_book.upper())
+
+            positions = conn.execute(query_pf, params_pf).fetchall()
+            if not positions:
+                raise ValueError(f"Không tìm thấy vị thế nắm giữ mã {t} trong danh mục để hạch toán cổ tức/quyền.")
+
+            total_shares_eligible = sum(float(p["quantity"]) for p in positions)
+            applied_details = []
+
+            gross_cash = 0.0
+            tax_cash = 0.0
+            net_cash = 0.0
+            total_bonus_shares = 0
+
+            if act == "CASH_DIVIDEND":
+                gross_cash = total_shares_eligible * cash_amount_per_share
+                tax_cash = gross_cash * tax_rate
+                net_cash = gross_cash - tax_cash
+
+                # Tăng tiền mặt vào tài khoản
+                cash_row = conn.execute("SELECT cash_balance FROM account_cash_balance WHERE account_id = ?;", (account,)).fetchone()
+                curr_cash = float(cash_row["cash_balance"]) if cash_row else 0.0
+                new_cash = curr_cash + net_cash
+                conn.execute("""
+                    INSERT INTO account_cash_balance (account_id, cash_balance, updated_at)
+                    VALUES (?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(account_id) DO UPDATE SET
+                        cash_balance = excluded.cash_balance,
+                        updated_at = CURRENT_TIMESTAMP;
+                """, (account, new_cash))
+
+                tx_comment = notes or f"Nhận cổ tức tiền {t}: {cash_amount_per_share:,.0f} đ/CP x {total_shares_eligible:,.0f} CP (Thuế 5%: {tax_cash:,.0f} đ)"
+                conn.execute("""
+                    INSERT INTO transactions (
+                        trade_date, money_date, symbol_date, account, type, symbol,
+                        quantity, cost, fee, tax, amount, total_amount, comment
+                    ) VALUES (?, ?, ?, ?, 'Cổ tức tiền', ?, ?, ?, 0.0, ?, ?, ?, ?);
+                """, (ex_date, p_date, ex_date, account, t, total_shares_eligible, cash_amount_per_share, tax_cash, gross_cash, net_cash, tx_comment))
+
+                applied_details.append({
+                    "type": "CASH_DIVIDEND",
+                    "shares_held": total_shares_eligible,
+                    "gross_cash": gross_cash,
+                    "tax": tax_cash,
+                    "net_cash": net_cash
+                })
+
+            elif act in ("STOCK_DIVIDEND", "BONUS_SHARES"):
+                for pos in positions:
+                    pos_account = pos["account"]
+                    pos_book = pos["strategy_book"]
+                    old_qty = float(pos["quantity"])
+                    old_avg_price = float(pos["avg_buy_price"])
+
+                    bonus_qty = int(old_qty * ratio)
+                    if bonus_qty <= 0:
+                        continue
+
+                    new_qty = old_qty + bonus_qty
+                    # CÔNG THỨC PHA LOÃNG GIÁ VỐN CHUẨN
+                    new_avg_price = (old_qty * old_avg_price) / new_qty
+                    curr_price = float(pos["current_price"]) if pos["current_price"] else old_avg_price
+                    new_market_val = new_qty * curr_price
+                    new_unrealized_pnl = new_market_val - (new_qty * new_avg_price)
+                    new_pnl_pct = (new_unrealized_pnl / (new_qty * new_avg_price)) * 100.0 if new_avg_price > 0 else 0.0
+
+                    conn.execute("""
+                        UPDATE portfolio
+                        SET quantity = ?, avg_buy_price = ?, market_value = ?,
+                            unrealized_pnl = ?, unrealized_pnl_pct = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE account = ? AND ticker = ? AND strategy_book = ?;
+                    """, (new_qty, new_avg_price, new_market_val, new_unrealized_pnl, new_pnl_pct, pos_account, t, pos_book))
+
+                    total_bonus_shares += bonus_qty
+                    tx_comment = notes or f"Nhận cổ tức CP {t} ({ratio*100:.1f}%): +{bonus_qty:,} CP, giá vốn pha loãng {old_avg_price:,.0f} -> {new_avg_price:,.0f} đ"
+                    conn.execute("""
+                        INSERT INTO transactions (
+                            trade_date, money_date, symbol_date, account, type, symbol,
+                            quantity, cost, fee, tax, amount, total_amount, avg_price, comment
+                        ) VALUES (?, ?, ?, ?, 'Cổ tức CP', ?, ?, 0.0, 0.0, 0.0, 0.0, 0.0, ?, ?);
+                    """, (ex_date, ex_date, p_date, pos_account, t, bonus_qty, new_avg_price, tx_comment))
+
+                    applied_details.append({
+                        "account": pos_account,
+                        "strategy_book": pos_book,
+                        "old_qty": old_qty,
+                        "bonus_qty": bonus_qty,
+                        "new_qty": new_qty,
+                        "old_avg_price": old_avg_price,
+                        "new_avg_price": new_avg_price
+                    })
+
+            cur = conn.execute("""
+                INSERT INTO corporate_actions (
+                    ticker, action_type, ex_date, record_date, payment_date,
+                    ratio, cash_amount_per_share, status, applied_at, notes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'APPLIED', ?, ?);
+            """, (t, act, ex_date, record_date, p_date, ratio, cash_amount_per_share, now_str, notes))
+            action_id = cur.lastrowid
+            conn.commit()
+
+            return {
+                "action_id": action_id,
+                "ticker": t,
+                "action_type": act,
+                "ex_date": ex_date,
+                "total_shares_eligible": total_shares_eligible,
+                "gross_cash": gross_cash,
+                "tax_cash": tax_cash,
+                "net_cash": net_cash,
+                "total_bonus_shares": total_bonus_shares,
+                "applied_details": applied_details,
+                "status": "APPLIED"
+            }
+
+    def get_corporate_actions(self, ticker: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        """Lấy danh sách các sự kiện quyền & cổ tức đã lưu"""
+        with self.get_connection() as conn:
+            if ticker:
+                rows = conn.execute("""
+                    SELECT * FROM corporate_actions 
+                    WHERE ticker = ? 
+                    ORDER BY ex_date DESC, id DESC 
+                    LIMIT ?;
+                """, (ticker.upper(), limit)).fetchall()
+            else:
+                rows = conn.execute("""
+                    SELECT * FROM corporate_actions 
+                    ORDER BY ex_date DESC, id DESC 
+                    LIMIT ?;
+                """, (limit,)).fetchall()
+            return [dict(r) for r in rows]
+
+    # ==========================================
+    # DỮ LIỆU TÀI CHÍNH CƠ BẢN (COMPANY FUNDAMENTALS)
+    # ==========================================
+    def upsert_fundamental(self, metrics: Dict[str, Any]) -> bool:
+        """Thêm hoặc cập nhật chỉ số tài chính cơ bản cho một mã cổ phiếu vào SQLite"""
+        t = metrics["ticker"].upper()
+        period = metrics.get("period") or f"{metrics.get('year', 2026)}Q{metrics.get('quarter', 3)}"
+        year = int(metrics.get("year", 2026))
+        quarter = int(metrics.get("quarter", 3))
+
+        with self.get_connection() as conn:
+            conn.execute("""
+                INSERT INTO company_fundamentals (
+                    ticker, period, year, quarter, revenue_growth_yoy, profit_growth_yoy,
+                    roe, gross_margin, debt_to_equity, ocf_to_net_income, pe, pb,
+                    pe_5y_median, piotroski_f_score, altman_z_score, notes, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(ticker, period) DO UPDATE SET
+                    revenue_growth_yoy = excluded.revenue_growth_yoy,
+                    profit_growth_yoy = excluded.profit_growth_yoy,
+                    roe = excluded.roe,
+                    gross_margin = excluded.gross_margin,
+                    debt_to_equity = excluded.debt_to_equity,
+                    ocf_to_net_income = excluded.ocf_to_net_income,
+                    pe = excluded.pe,
+                    pb = excluded.pb,
+                    pe_5y_median = excluded.pe_5y_median,
+                    piotroski_f_score = excluded.piotroski_f_score,
+                    altman_z_score = excluded.altman_z_score,
+                    notes = excluded.notes,
+                    updated_at = CURRENT_TIMESTAMP;
+            """, (
+                t, period, year, quarter,
+                float(metrics.get("revenue_growth_yoy", 0.0)),
+                float(metrics.get("profit_growth_yoy", 0.0)),
+                float(metrics.get("roe", 0.0)),
+                float(metrics.get("gross_margin", 0.0)),
+                float(metrics.get("debt_to_equity", 0.0)),
+                float(metrics.get("ocf_to_net_income", 1.0)),
+                float(metrics.get("pe", 15.0)),
+                float(metrics.get("pb", 1.5)),
+                float(metrics.get("pe_5y_median", 15.0)),
+                int(metrics.get("piotroski_f_score", 6)),
+                float(metrics.get("altman_z_score", 2.6)),
+                metrics.get("notes")
+            ))
+            conn.commit()
+        return True
+
+    def bulk_upsert_fundamentals(self, records: List[Dict[str, Any]]) -> int:
+        """Nạp hàng loạt dữ liệu tài chính BCTC vào SQLite"""
+        count = 0
+        for r in records:
+            if self.upsert_fundamental(r):
+                count += 1
+        return count
+
+    def get_latest_fundamental(self, ticker: str) -> Optional[Dict[str, Any]]:
+        """Lấy chỉ số BCTC mới nhất của một mã cổ phiếu từ SQLite"""
+        with self.get_connection() as conn:
+            row = conn.execute("""
+                SELECT * FROM company_fundamentals
+                WHERE ticker = ?
+                ORDER BY year DESC, quarter DESC, updated_at DESC LIMIT 1;
+            """, (ticker.upper(),)).fetchone()
+            return dict(row) if row else None
+
+    def get_all_fundamentals(self, ticker: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Lấy danh sách tất cả chỉ số BCTC từ SQLite"""
+        with self.get_connection() as conn:
+            if ticker:
+                rows = conn.execute("""
+                    SELECT * FROM company_fundamentals
+                    WHERE ticker = ?
+                    ORDER BY year DESC, quarter DESC;
+                """, (ticker.upper(),)).fetchall()
+            else:
+                rows = conn.execute("""
+                    SELECT * FROM company_fundamentals
+                    ORDER BY ticker ASC, year DESC, quarter DESC;
+                """).fetchall()
+            return [dict(row) for row in rows]

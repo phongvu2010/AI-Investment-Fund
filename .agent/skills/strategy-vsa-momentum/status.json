@@ -1,23 +1,14 @@
 {
   "strategy_id": "vsa-momentum",
-  "title": "VSA Momentum Breakout (HPG) - Evolved v2.0",
+  "title": "VSA Momentum Breakout (HPG)",
   "tickers": [
     "HPG"
   ],
   "cro_status": "REJECTED",
   "verdict": "CHIẾN LƯỢC BỊ TỪ CHỐI (Không đạt tiêu chuẩn kiểm soát rủi ro của Quỹ)",
-  "cagr_pct": 1.7005491345910784,
-  "sharpe": -0.9263765352050585,
-  "mdd_pct": 5.310597563624909,
-  "profit_factor": 4.806414643137864,
-  "win_rate_pct": 50.0,
-  "total_trades": 8,
-  "html_report": "dashboard/reports/vsa_momentum_breakout_(hpg)_-_evolved.html",
-  "html_filename": "vsa_momentum_breakout_(hpg)_-_evolved.html",
-  "best_params": {
-    "fast_ma": 10,
-    "slow_ma": 50,
-    "vol_mult": 0.8
-  },
-  "evolved_at": "2026-11-13 21:44:35"
+  "cagr_pct": -0.32308270401322225,
+  "sharpe": -6.439401807062793,
+  "mdd_pct": 2.2763,
+  "html_report": "dashboard/reports/vsa_momentum_breakout_(hpg).html",
+  "html_filename": "vsa_momentum_breakout_(hpg).html"
 }

@@ -1,42 +1,97 @@
 # ====================================================================
 # GITIGNORE CHO DỰ ÁN AI INVESTMENT FUND
-# Chuẩn mực cho: Python + Node.js (Vite/React) + SQLite + Parquet + Bảo mật
+# Chuẩn mực: Python + Node.js (React 19) + SQLite + ML Models + Parquet + Bảo Mật
 # ====================================================================
 
 # --------------------------------------------------------------------
 # 1. BẢO MẬT & KHÓA BÍ MẬT (SECRETS & CREDENTIALS - TUYỆT ĐỐI KHÔNG COMMIT)
 # --------------------------------------------------------------------
+# Tệp biến môi trường chứa API Key (Telegram, Gemini, CTCK...)
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+
+# Thư mục lưu trữ bí mật cục bộ
+.secrets/*
+!.secrets/.gitkeep
+
+# Chứng chỉ SSL, Private Keys, SSH
 *.pem
 *.key
 *.cert
+*.crt
+*.id_rsa
+*.id_ed25519
 
-# Khóa dịch vụ Google Cloud / BigQuery
+# Khóa dịch vụ Google Cloud / BigQuery Service Account
 *service_account*.json
 *credentials*.json
 *gcp*.json
 credentials/
+token.json
 
 # --------------------------------------------------------------------
-# 2. CƠ SỞ DỮ LIỆU & FILE DỮ LIỆU ĐỊNH LƯỢNG LỚN (DATABASE & DATA LAKES)
+# 2. DỮ LIỆU CÁ NHÂN & KHO DỮ LIỆU ĐỊNH LƯỢNG LỚN (DATA & PRIVACY)
 # --------------------------------------------------------------------
-# CSDL SQLite lưu trữ số dư tài khoản thực tế & sổ lệnh
-*.db
-*.sqlite
-*.sqlite3
-database/*.db
+# Sổ giao dịch thực tế Excel & Báo cáo sao kê tài sản cá nhân
+*.xlsx
+*.xls
+*.xlsm
+data/*.xlsx
+data/*.xls
+data/*.xlsm
 
 # Dữ liệu nến giá Parquet & DuckDB (Tải từ BigQuery hoặc sinh cục bộ)
 *.parquet
 data/*.parquet
-data/*.csv
 *.duckdb
 data/*.duckdb
 
+# Dữ liệu trích xuất dạng bảng CSV / TSV lớn
+*.csv
+data/*.csv
+*.tsv
+data/*.tsv
+data/cache/
+
+# Giữ lại cấu trúc thư mục data
+!data/.gitkeep
+
 # --------------------------------------------------------------------
-# 3. MÔI TRƯỜNG PYTHON & CACHE (PYTHON RUNTIME)
+# 3. CƠ SỞ DỮ LIỆU CỤC BỘ (SQLITE DATABASES)
+# --------------------------------------------------------------------
+# File CSDL SQLite lưu số dư tài khoản thực tế & sổ lệnh
+*.db
+*.sqlite
+*.sqlite3
+database/*.db
+database/*.sqlite
+database/*.sqlite3
+database/test_*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# --------------------------------------------------------------------
+# 4. HẠ TẦNG MACHINE LEARNING & ARTIFACTS (ML WEIGHTS & MODELS)
+# --------------------------------------------------------------------
+# File nhị phân lưu trọng số mô hình đã huấn luyện (sinh ra bởi ml_model_trainer.py)
+*.joblib
+models/*.joblib
+*.pkl
+*.pickle
+models/*.pkl
+*.onnx
+*.weights
+*.bin
+*.pt
+*.pth
+
+# Giữ lại cấu trúc thư mục models
+!models/.gitkeep
+
+# --------------------------------------------------------------------
+# 5. MÔI TRƯỜNG PYTHON & BUILD ARTIFACTS (PYTHON RUNTIME)
 # --------------------------------------------------------------------
 __pycache__/
 *.py[cod]
@@ -51,7 +106,7 @@ ENV/
 env.bak/
 venv.bak/
 
-# Phân phối & Đóng gói (Build & Package)
+# Đóng gói & Phân phối (Build & Package)
 build/
 develop-eggs/
 dist/
@@ -74,15 +129,20 @@ MANIFEST
 .pytest_cache/
 .coverage
 .coverage.*
+coverage.xml
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
 
 # --------------------------------------------------------------------
-# 4. NODE.JS / VITE / REACT FRONTEND (DASHBOARD)
+# 6. NODE.JS / VITE / REACT FRONTEND (DASHBOARD)
 # --------------------------------------------------------------------
-# Thư viện phụ thuộc Node
+# Thư viện phụ thuộc Node (cả root và thư mục dashboard)
 node_modules/
+dashboard/frontend/node_modules/
+
+# Nhật ký lỗi trình quản lý gói
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -93,22 +153,40 @@ pnpm-debug.log*
 dashboard/frontend/dist/
 dist-ssr/
 
-# Local cache của Vite
+# Local cache của Vite & Linter
 dashboard/frontend/.vite/
 .eslintcache
 
 # --------------------------------------------------------------------
-# 5. BÁO CÁO HTML SINH TỰ ĐỘNG (INTERACTIVE REPORTS CACHE)
+# 7. JUPYTER NOTEBOOKS
 # --------------------------------------------------------------------
-# Biểu đồ Plotly HTML nặng sinh ra trong quá trình backtest
-dashboard/reports/*.html
-!dashboard/reports/.gitkeep
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
 
 # --------------------------------------------------------------------
-# 6. RÁC HỆ ĐIỀU HÀNH & TRÌNH SOẠN THẢO (OS & IDE JUNK)
+# 8. BÁO CÁO HTML & BIỂU ĐỒ SINH TỰ ĐỘNG (INTERACTIVE REPORTS CACHE)
+# --------------------------------------------------------------------
+# Biểu đồ Plotly HTML nặng (sinh ra trong quá trình backtest)
+dashboard/reports/*.html
+!dashboard/reports/.gitkeep
+reports/*.html
+reports/*.pdf
+reports/*.csv
+!reports/.gitkeep
+
+# --------------------------------------------------------------------
+# 9. NHẬT KÝ & QUẢN LÝ TIẾN TRÌNH (LOGS & PIDS)
+# --------------------------------------------------------------------
+*.log
+logs/
+*.pid
+
+# --------------------------------------------------------------------
+# 10. RÁC HỆ ĐIỀU HÀNH & TRÌNH SOẠN THẢO (OS & IDE JUNK)
 # --------------------------------------------------------------------
 # macOS
 .DS_Store
+.DS_Store?
 .AppleDouble
 .LSOverride
 ._*
@@ -135,3 +213,23 @@ Desktop.ini
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+
+# --------------------------------------------------------------------
+# 11. NHẬT KÝ TIẾN HÓA & TEST ARTIFACTS CỤC BỘ (LOCAL AGENT MEMOS & TESTS)
+# --------------------------------------------------------------------
+# Bỏ qua các file memo sinh tự động theo timestamp mỗi lần chạy test / optimize
+.agent/journals/evolution_memo_*.md
+.agent/journals/post_mortem_*.md
+!.agent/journals/.gitkeep
+
+# Bỏ qua các kỹ năng / chiến lược sinh tự động phục vụ kiểm thử (Test Skills)
+.agent/skills/*test*/
+.agent/skills/strategy-test-*/
+.agent/skills/*-test/
+
+# Thư mục tạm thời cục bộ
+tmp/
+temp/
+scratch/
+.agent/scratch/
+.agent/sessions/

@@ -66,6 +66,11 @@ MAX_POSITION_PCT = float(os.getenv("MAX_POSITION_PCT", "0.20"))    # Fallback ch
 HARD_STOP_LOSS_PCT = float(os.getenv("HARD_STOP_LOSS_PCT", "0.07")) # Fallback chung: Cắt lỗ cứng 7.0%
 MAX_WEEKLY_DRAWDOWN_PCT = float(os.getenv("MAX_WEEKLY_DRAWDOWN_PCT", "0.05")) # MDD tuần tối đa 5%
 
+# Bộ lọc Thanh khoản & Quản trị Rủi ro Tác động Giá (Liquidity & Market Impact)
+MIN_ADTV_VND = float(os.getenv("MIN_ADTV_VND", "10000000000"))                # Giá trị GD tối thiểu 20 phiên: 10 tỷ VND/phiên
+MIN_ADV_SHARES = int(os.getenv("MIN_ADV_SHARES", "100000"))                    # Khối lượng GD tối thiểu 20 phiên: 100.000 CP/phiên
+MAX_PARTICIPATION_RATE = float(os.getenv("MAX_PARTICIPATION_RATE", "0.02"))    # Tối đa 2.0% volume trung bình 20 phiên để tránh trượt giá
+
 # ==========================================
 # 4. CẤU HÌNH TELEGRAM BOT (GIAO DIỆN DI ĐỘNG)
 # ==========================================
