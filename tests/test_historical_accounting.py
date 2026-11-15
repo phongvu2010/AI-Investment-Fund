@@ -16,9 +16,9 @@ sys.path.insert(0, str(BASE_DIR))
 
 import pytest
 from fastapi.testclient import TestClient
-from database.db_manager import DatabaseManager
-from tools.transaction_importer import TransactionImporter
-from dashboard.api import app
+from core.accounting.db_manager import DatabaseManager
+from core.data.transaction_importer import TransactionImporter
+from apps.api.main import app
 
 def test_historical_transaction_replay():
     print("\n[TEST 1] Kiểm tra Replay 1.710 Giao dịch Lịch sử...")
@@ -120,7 +120,7 @@ def test_api_endpoints_real_data():
     print("✅ Test 4 Passed: Toàn bộ REST API Endpoints phản hồi chuẩn xác số liệu thực tế.")
 
     # Cập nhật chuỗi NAV các phiên gần nhất theo giá thực tế BigQuery
-    from database.db_manager import DatabaseManager
+    from core.accounting.db_manager import DatabaseManager
     db = DatabaseManager()
     daily_prices = {
         '2026-11-03': {'FPT': 50400, 'HPG': 21250, 'MBS': 15000, 'SHS': 12300, 'SSI': 19150, 'FLC': 0},

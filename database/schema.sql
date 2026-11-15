@@ -188,6 +188,19 @@ CREATE TABLE IF NOT EXISTS company_fundamentals (
     PRIMARY KEY (ticker, period)
 );
 
+-- 11. BẢNG QUẢN LÝ TÀI SẢN ĐÓNG BĂNG / ĐÌNH CHỈ / HỦY NIÊM YẾT (SUSPENDED & SPECIAL SITUATIONS ASSETS)
+CREATE TABLE IF NOT EXISTS suspended_assets (
+    ticker TEXT PRIMARY KEY,                   -- Mã cổ phiếu (ví dụ: FLC)
+    status TEXT NOT NULL DEFAULT 'SUSPENDED' CHECK(status IN ('SUSPENDED', 'DELISTED', 'FROZEN', 'ACTIVE')),
+    reason TEXT NOT NULL,                      -- Lý do đình chỉ / hủy niêm yết
+    suspended_date TEXT,                       -- Ngày bắt đầu đình chỉ / hủy niêm yết
+    provision_rate REAL DEFAULT 1.0 CHECK(provision_rate >= 0.0 AND provision_rate <= 1.0), -- Tỷ lệ trích lập dự phòng (1.0 = 100% trích lập, định giá 0đ)
+    recovery_estimated_price REAL DEFAULT 0.0, -- Giá trị ước tính thu hồi (nếu có thanh lý / chuyển sàn UPCOM)
+    notes TEXT,                                -- Ghi chú phân tích / theo dõi
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 -- CHỈ MỤC TỐI ƯU TỐC ĐỘ TRUY VẤN
 CREATE INDEX IF NOT EXISTS idx_trans_acc ON transactions(account);
 CREATE INDEX IF NOT EXISTS idx_trans_sym ON transactions(symbol);

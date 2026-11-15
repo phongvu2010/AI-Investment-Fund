@@ -15,9 +15,9 @@ sys.path.insert(0, str(BASE_DIR))
 
 import re
 from fastapi.testclient import TestClient
-from dashboard.api import app
-from interfaces.message_templates import TelegramMessageFormatter
-from database.db_manager import DatabaseManager
+from apps.api.main import app
+from apps.bot.message_templates import TelegramMessageFormatter
+from core.accounting.db_manager import DatabaseManager
 
 def run_phase3_tests():
     print("=" * 70)

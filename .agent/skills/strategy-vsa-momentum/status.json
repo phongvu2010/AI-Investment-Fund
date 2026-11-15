@@ -9,6 +9,6 @@
   "cagr_pct": -0.32308270401322225,
   "sharpe": -6.439401807062793,
   "mdd_pct": 2.2763,
-  "html_report": "dashboard/reports/vsa_momentum_breakout_(hpg).html",
+  "html_report": "apps/api/static/reports/vsa_momentum_breakout_(hpg).html",
   "html_filename": "vsa_momentum_breakout_(hpg).html"
 }

@@ -3,7 +3,7 @@
 * **Thời gian kiểm nghiệm:** `4.8 năm` (1746 ngày giao dịch)
 * **Vốn khởi điểm giả lập:** `1,000,000,000 VND`
 * **Vốn kết thúc (Equity):** `984,649,750 VND`
-* **Biểu đồ tương tác HTML:** [dashboard/reports/vsa_momentum_breakout_(hpg).html](../../../dashboard/reports/vsa_momentum_breakout_(hpg).html)
+* **Biểu đồ tương tác HTML:** [apps/api/static/reports/vsa_momentum_breakout_(hpg).html](../../../apps/api/static/reports/vsa_momentum_breakout_(hpg).html)
 
 ---
 

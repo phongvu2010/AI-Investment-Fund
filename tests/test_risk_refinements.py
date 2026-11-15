@@ -13,10 +13,10 @@ from pathlib import Path
 import polars as pl
 
 from config import settings
-from database.db_manager import DatabaseManager
-from tools.fundamental_screener import FundamentalScreener
-from tools.investment_debate_engine import InvestmentDebateEngine
-from tools.strategy_optimizer import StrategyOptimizerEngine
+from core.accounting.db_manager import DatabaseManager
+from core.quant.fundamental_screener import FundamentalScreener
+from ai_brain.engines.investment_debate_engine import InvestmentDebateEngine
+from core.backtest.strategy_optimizer import StrategyOptimizerEngine
 
 @pytest.fixture
 def temp_db(tmp_path):
@@ -270,7 +270,7 @@ def test_overfitting_guard_evaluation():
 # ====================================================================
 def test_intraday_multi_source_and_fallback():
     """Kiểm tra động cơ dữ liệu đa nguồn: không bao giờ crash và tự động fallback về Parquet"""
-    from tools.intraday_data_feed import IntradayDataFeed
+    from core.data.intraday_data_feed import IntradayDataFeed
 
     feed = IntradayDataFeed()
     health = feed.get_feed_health()
@@ -292,7 +292,7 @@ def test_intraday_multi_source_and_fallback():
 # ====================================================================
 def test_anti_overfitting_cro_veto():
     """Kiểm tra Giám đốc Rủi ro (CRO) bắt buộc VETO nếu chiến lược bị Overfitting dù Sharpe In-Sample rất cao"""
-    from backtest.report_adapter import BacktestReportAdapter
+    from core.backtest.report_adapter import BacktestReportAdapter
 
     # Giả lập metrics In-Sample rất cao (Sharpe 2.50, MDD 8%, PF 2.2, 40 lệnh)
     full_metrics = {
@@ -337,8 +337,8 @@ def test_anti_overfitting_cro_veto():
 # ====================================================================
 def test_floor_lock_detection_and_cro_defense():
     """Kiểm tra phát hiện Kẹt sàn (Floor-lock) và phân tích độ sâu sổ lệnh"""
-    from tools.intraday_data_feed import IntradayDataFeed
-    from tools.parquet_manager import ParquetMarketDataManager
+    from core.data.intraday_data_feed import IntradayDataFeed
+    from core.data.parquet_manager import ParquetMarketDataManager
 
     feed = IntradayDataFeed()
     pm = ParquetMarketDataManager()

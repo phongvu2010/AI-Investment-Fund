@@ -136,10 +136,11 @@ htmlcov/
 .hypothesis/
 
 # --------------------------------------------------------------------
-# 6. NODE.JS / VITE / REACT FRONTEND (DASHBOARD)
+# 6. NODE.JS / VITE / REACT FRONTEND (DASHBOARD & APPS)
 # --------------------------------------------------------------------
-# Thư viện phụ thuộc Node (cả root và thư mục dashboard)
+# Thư viện phụ thuộc Node (cả root, apps/web và dashboard cũ)
 node_modules/
+apps/web/node_modules/
 dashboard/frontend/node_modules/
 
 # Nhật ký lỗi trình quản lý gói
@@ -150,10 +151,13 @@ pnpm-debug.log*
 .pnpm-debug.log*
 
 # Bản build của React Frontend (tạo ra khi chạy npm run build)
+apps/web/dist/
 dashboard/frontend/dist/
+dist/
 dist-ssr/
 
 # Local cache của Vite & Linter
+apps/web/.vite/
 dashboard/frontend/.vite/
 .eslintcache
 
@@ -167,12 +171,31 @@ dashboard/frontend/.vite/
 # 8. BÁO CÁO HTML & BIỂU ĐỒ SINH TỰ ĐỘNG (INTERACTIVE REPORTS CACHE)
 # --------------------------------------------------------------------
 # Biểu đồ Plotly HTML nặng (sinh ra trong quá trình backtest)
+api/static/reports/*.html
+api/static/reports/*.pdf
+api/static/reports/*.csv
+!api/static/reports/.gitkeep
+
 dashboard/reports/*.html
+dashboard/reports/*.pdf
+dashboard/reports/*.csv
 !dashboard/reports/.gitkeep
+
 reports/*.html
 reports/*.pdf
 reports/*.csv
 !reports/.gitkeep
+
+storage/reports/*.html
+storage/reports/*.pdf
+storage/reports/*.csv
+!storage/reports/.gitkeep
+
+# Quy tắc tổng quát cho mọi thư mục reports
+**/reports/*.html
+**/reports/*.pdf
+**/reports/*.csv
+!**/reports/.gitkeep
 
 # --------------------------------------------------------------------
 # 9. NHẬT KÝ & QUẢN LÝ TIẾN TRÌNH (LOGS & PIDS)
@@ -218,8 +241,9 @@ Desktop.ini
 # 11. NHẬT KÝ TIẾN HÓA & TEST ARTIFACTS CỤC BỘ (LOCAL AGENT MEMOS & TESTS)
 # --------------------------------------------------------------------
 # Bỏ qua các file memo sinh tự động theo timestamp mỗi lần chạy test / optimize
-.agent/journals/evolution_memo_*.md
-.agent/journals/post_mortem_*.md
+# .agent/journals/evolution_memo_*.md
+# .agent/journals/post_mortem_*.md
+.agent/journals/
 !.agent/journals/.gitkeep
 
 # Bỏ qua các kỹ năng / chiến lược sinh tự động phục vụ kiểm thử (Test Skills)

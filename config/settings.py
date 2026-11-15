@@ -72,7 +72,13 @@ MIN_ADV_SHARES = int(os.getenv("MIN_ADV_SHARES", "100000"))                    #
 MAX_PARTICIPATION_RATE = float(os.getenv("MAX_PARTICIPATION_RATE", "0.02"))    # Tối đa 2.0% volume trung bình 20 phiên để tránh trượt giá
 
 # ==========================================
-# 4. CẤU HÌNH TELEGRAM BOT (GIAO DIỆN DI ĐỘNG)
+# 4. CẤU HÌNH ĐƯỜNG DẪN BÁO CÁO & ARTIFACTS
+# ==========================================
+REPORTS_DIR = BASE_DIR / "apps" / "api" / "static" / "reports"
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# ==========================================
+# 5. CẤU HÌNH TELEGRAM BOT (GIAO DIỆN DI ĐỘNG)
 # ==========================================
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")

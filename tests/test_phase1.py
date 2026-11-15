@@ -14,9 +14,9 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
-from database.db_manager import DatabaseManager
-from tools.bigquery_sync import BigQuerySyncEngine
-from tools.parquet_manager import ParquetMarketDataManager
+from core.accounting.db_manager import DatabaseManager
+from core.data.bigquery_sync import BigQuerySyncEngine
+from core.data.parquet_manager import ParquetMarketDataManager
 from config import settings
 
 def run_tests():

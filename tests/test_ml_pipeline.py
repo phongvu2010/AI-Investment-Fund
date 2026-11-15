@@ -16,11 +16,11 @@ sys.path.insert(0, str(BASE_DIR))
 
 import polars as pl
 from fastapi.testclient import TestClient
-from tools.ml_feature_extractor import MLFeatureExtractor
-from tools.ml_model_trainer import train_and_export_local_model, run_walk_forward_validation
-from tools.ml_predictor import UniversalAlphaPredictor
-from backtest.strategy_template import BaseFundStrategy
-from dashboard.api import app
+from core.quant.ml_feature_extractor import MLFeatureExtractor
+from core.quant.ml_model_trainer import train_and_export_local_model, run_walk_forward_validation
+from core.quant.ml_predictor import UniversalAlphaPredictor
+from core.backtest.strategy_template import BaseFundStrategy
+from apps.api.main import app
 
 def test_ml_feature_extractor():
     print("\n[TEST 1] Kiểm tra Bộ Trích Xuất Đặc Trưng ML & Gán Nhãn...")

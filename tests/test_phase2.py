@@ -16,8 +16,8 @@ sys.path.insert(0, str(BASE_DIR))
 
 import polars as pl
 import vn_backtest as vb
-from backtest.strategy_template import BaseFundStrategy, indicator_sma, indicator_volume_sma
-from tools.strategy_generator import StrategySkillPackage
+from core.backtest.strategy_template import BaseFundStrategy, indicator_sma, indicator_volume_sma
+from core.backtest.strategy_generator import StrategySkillPackage
 
 # ====================================================================
 # ĐỊNH NGHĨA CHIẾN LƯỢC MẪU: VSA MOMENTUM BREAKOUT

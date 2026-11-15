@@ -7,11 +7,11 @@ from datetime import datetime, date
 from fastapi.testclient import TestClient
 
 from config import settings
-from database.db_manager import DatabaseManager
-from tools.fundamental_screener import FundamentalScreener
-from tools.ml_feature_extractor import MLFeatureExtractor
-from tools.ml_predictor import UniversalAlphaPredictor
-from dashboard.api import app
+from core.accounting.db_manager import DatabaseManager
+from core.quant.fundamental_screener import FundamentalScreener
+from core.quant.ml_feature_extractor import MLFeatureExtractor
+from core.quant.ml_predictor import UniversalAlphaPredictor
+from apps.api.main import app
 
 
 from pathlib import Path
@@ -335,7 +335,7 @@ class TestLiveInvestmentCommittee:
 
     def test_cro_liquidity_gatekeeper_and_capping(self):
         """Xác nhận cơ chế kiểm tra thanh khoản ADTV và Liquidity Capping của CRO"""
-        from tools.parquet_manager import ParquetMarketDataManager
+        from core.data.parquet_manager import ParquetMarketDataManager
         pm = ParquetMarketDataManager()
         
         # 1. Kiểm tra mã lớn như FPT/HPG có ADTV > 10 tỷ VND
@@ -356,7 +356,7 @@ class TestLiveInvestmentCommittee:
 
     def test_market_regime_and_breadth_calculation(self):
         """Xác nhận cỗ máy tính toán Độ rộng thị trường và xoay trục phân bổ vốn động"""
-        from tools.parquet_manager import ParquetMarketDataManager
+        from core.data.parquet_manager import ParquetMarketDataManager
         pm = ParquetMarketDataManager()
         regime = pm.get_market_regime()
         assert "regime" in regime
@@ -370,15 +370,15 @@ class TestLiveInvestmentCommittee:
     def test_intraday_risk_scanner_alert_logic(self):
         """Xác nhận logic quét rủi ro giữa phiên 14:15 PM trước phiên ATC"""
         import asyncio
-        from tools.scheduler import FundScheduler
+        from core.scheduler.cron_scheduler import FundScheduler
         sched = FundScheduler()
         # Chạy thử nghiệm quét rủi ro giữa phiên không gây crash
         asyncio.run(sched.run_intraday_risk_job())
 
     def test_intraday_data_feed_and_fusion(self):
         """Xác nhận động cơ Intraday Data Feed và cơ chế ghép nến live vào Parquet"""
-        from tools.intraday_data_feed import IntradayDataFeed
-        from tools.parquet_manager import ParquetMarketDataManager
+        from core.data.intraday_data_feed import IntradayDataFeed
+        from core.data.parquet_manager import ParquetMarketDataManager
 
         feed = IntradayDataFeed()
         assert feed is not None

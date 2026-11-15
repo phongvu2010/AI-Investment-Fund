@@ -17,9 +17,9 @@ services:
       - ./database:/app/database
       - ./models:/app/models
       - ./.agent:/app/.agent
-      - ./dashboard/reports:/app/dashboard/reports
+      - ./apps/api/static/reports:/app/apps/api/static/reports
       - ./config:/app/config
-    command: python dashboard/api.py
+    command: python apps/api/main.py
 
   # -------------------------------------------------------------
   # DỊCH VỤ 2: TELEGRAM BOT CO-PILOT (TƯƠNG TÁC DI ĐỘNG 24/7)
@@ -38,7 +38,7 @@ services:
       - ./models:/app/models
       - ./.agent:/app/.agent
       - ./config:/app/config
-    command: python interfaces/telegram_bot.py
+    command: python apps/bot/telegram_bot.py
 
   # -------------------------------------------------------------
   # DỊCH VỤ 3: BỘ LẬP LỊCH TỰ ĐỘNG (SCHEDULER / CRON)
@@ -56,6 +56,6 @@ services:
       - ./database:/app/database
       - ./models:/app/models
       - ./.agent:/app/.agent
-      - ./dashboard/reports:/app/dashboard/reports
+      - ./apps/api/static/reports:/app/apps/api/static/reports
       - ./config:/app/config
-    command: python tools/scheduler.py
+    command: python core/scheduler/cron_scheduler.py

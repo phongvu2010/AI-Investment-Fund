@@ -18,14 +18,14 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from config import settings
-from database.db_manager import DatabaseManager
-from tools.jev_decision_engine import JevDecisionEngine, Noul, Choice, Score
-from harness.context_manager import HarnessContextManager
-from harness.guardrail_middleware import GuardrailMiddleware, GuardrailVetoException
-from harness.verification_loop import HarnessVerificationLoop
-from tools.investment_debate_engine import InvestmentDebateEngine
-from backtest.strategy_template import BaseFundStrategy, indicator_sma, indicator_volume_sma
-from dashboard.api import app
+from core.accounting.db_manager import DatabaseManager
+from ai_brain.engines.jev_decision_engine import JevDecisionEngine, Noul, Choice, Score
+from ai_brain.harness.context_manager import HarnessContextManager
+from ai_brain.harness.guardrail_middleware import GuardrailMiddleware, GuardrailVetoException
+from ai_brain.harness.verification_loop import HarnessVerificationLoop
+from ai_brain.engines.investment_debate_engine import InvestmentDebateEngine
+from core.backtest.strategy_template import BaseFundStrategy, indicator_sma, indicator_volume_sma
+from apps.api.main import app
 
 
 # ====================================================================

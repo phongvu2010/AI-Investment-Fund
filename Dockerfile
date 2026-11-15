@@ -4,10 +4,10 @@
 FROM node:22-alpine AS frontend-builder
 WORKDIR /app/frontend
 
-COPY dashboard/frontend/package*.json ./
+COPY apps/web/package*.json ./
 RUN npm install
 
-COPY dashboard/frontend/ ./
+COPY apps/web/ ./
 RUN npm run build
 
 # ====================================================================
@@ -37,10 +37,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Copy bản build tĩnh của React từ Stage 1 sang thư mục phục vụ của FastAPI
-COPY --from=frontend-builder /app/frontend/dist /app/dashboard/frontend/dist
+COPY --from=frontend-builder /app/frontend/dist /app/apps/web/dist
 
 # Expose cổng Web Dashboard & API
 EXPOSE 8000
 
-# Lệnh mặc định khi chạy container: Khởi chạy Web Dashboard
-CMD ["python", "dashboard/api.py"]
+# Lệnh mặc định khi chạy container: Khởi chạy Web Dashboard API
+CMD ["python", "apps/api/main.py"]

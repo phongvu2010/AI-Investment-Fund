@@ -11,14 +11,14 @@ from datetime import date
 from typing import Optional
 
 from config import settings
-from database.db_manager import DatabaseManager
-from tools.parquet_manager import ParquetMarketDataManager
-from tools.fundamental_screener import FundamentalScreener
-from tools.ml_predictor import UniversalAlphaPredictor
-from tools.investment_debate_engine import InvestmentDebateEngine
-from tools.jev_decision_engine import JevDecisionEngine
-from harness.context_manager import HarnessContextManager
-from harness.guardrail_middleware import GuardrailMiddleware, GuardrailVetoException
+from core.accounting.db_manager import DatabaseManager
+from core.data.parquet_manager import ParquetMarketDataManager
+from core.quant.fundamental_screener import FundamentalScreener
+from core.quant.ml_predictor import UniversalAlphaPredictor
+from ai_brain.engines.investment_debate_engine import InvestmentDebateEngine
+from ai_brain.engines.jev_decision_engine import JevDecisionEngine
+from ai_brain.harness.context_manager import HarnessContextManager
+from ai_brain.harness.guardrail_middleware import GuardrailMiddleware, GuardrailVetoException
 
 def print_banner():
     banner = """
@@ -39,10 +39,21 @@ def show_status():
     portfolio = db.get_portfolio()
     pq_summary = parquet_mgr.get_summary()
 
+    total_nav = float(nav_info.get('total_nav', settings.INITIAL_CAPITAL))
+    liquid_nav = float(nav_info.get('liquid_nav', total_nav))
+    if liquid_nav <= 0:
+        liquid_nav = total_nav
+
+    frozen_assets = float(nav_info.get('frozen_assets_value', 0.0))
+    provision_loss = float(nav_info.get('provision_loss', 0.0))
+
     print("📊 [1] TÌNH HÌNH TÀI SẢN & VỐN (NAV):")
-    print(f"   • Tổng Tài sản Ròng (NAV): {nav_info.get('total_nav', settings.INITIAL_CAPITAL):,.0f} VND")
+    print(f"   • Tổng Tài sản Ròng (NAV): {total_nav:,.0f} VND")
+    print(f"   • NAV Khả dụng (Liquid):  {liquid_nav:,.0f} VND")
     print(f"   • Tiền mặt khả dụng:      {nav_info.get('cash_balance', settings.INITIAL_CAPITAL):,.0f} VND")
     print(f"   • Giá trị Cổ phiếu:       {nav_info.get('stock_value', 0.0):,.0f} VND")
+    if frozen_assets > 0 or provision_loss > 0:
+        print(f"   • Tài sản Đóng băng:      {frozen_assets:,.0f} VND (Dự phòng tổn thất: {provision_loss:,.0f} VND)")
     print(f"   • Biến động ngày:         {nav_info.get('daily_pnl', 0.0):+,.0f} VND ({nav_info.get('daily_pnl_pct', 0.0):+.2f}%)")
     print(f"   • Lợi nhuận lũy kế:       {nav_info.get('cumulative_pnl', 0.0):+,.0f} VND")
 
@@ -51,7 +62,8 @@ def show_status():
         print("   • Đang giữ 100% Tiền mặt.")
     else:
         for item in portfolio:
-            print(f"   • {item['ticker']}: {item['quantity']:,} CP | Giá vốn: {item['avg_buy_price']:,.2f} | Thị giá: {item.get('current_price', 0):,.2f} | PnL: {item.get('unrealized_pnl', 0):+,.0f} VND ({item.get('unrealized_pnl_pct', 0):+.2f}%)")
+            status_tag = f" ⚠️ [{item.get('asset_status')}]" if item.get('asset_status') and item.get('asset_status') != 'ACTIVE' else ""
+            print(f"   • {item['ticker']}{status_tag}: {item['quantity']:,} CP | Giá vốn: {item['avg_buy_price']:,.2f} | Thị giá: {item.get('current_price', 0):,.2f} | PnL: {item.get('unrealized_pnl', 0):+,.0f} VND ({item.get('unrealized_pnl_pct', 0):+.2f}%)")
 
     print("\n💾 [3] KHO DỮ LIỆU ĐỊNH LƯỢNG (PARQUET 5 NĂM):")
     if pq_summary["status"] == "READY":
@@ -435,26 +447,78 @@ def run_workflow_eod():
     
     print(f"✅ ĐÃ CHỐT SỔ NAV NGÀY [{today_str}]:")
     print(f"   • Tổng Tài sản Ròng (NAV): {res['total_nav']:,.0f} VND")
+    print(f"   • NAV Khả dụng (Liquid):  {res.get('liquid_nav', res['total_nav']):,.0f} VND")
     print(f"   • Tiền mặt:               {res['cash_balance']:,.0f} VND")
     print(f"   • Cổ phiếu:               {res['stock_value']:,.0f} VND")
+    if res.get('frozen_assets_value', 0) > 0 or res.get('provision_loss', 0) > 0:
+        print(f"   • Tài sản Đóng băng:      {res.get('frozen_assets_value', 0):,.0f} VND (Dự phòng: {res.get('provision_loss', 0):,.0f} VND)")
     print(f"   • Biến động ngày:         {res['daily_pnl']:+,.0f} VND ({res['daily_pnl_pct']:+.2f}%)")
     print(f"   • Lãi tạm tính:           {res['unrealized_pnl']:+,.0f} VND")
+
+def run_wfa_cli(ticker: str = "HPG", n_splits: int = 4, window_type: str = "rolling"):
+    """Thực thi Walk-Forward Analysis (WFA) trực tiếp từ dòng lệnh CLI"""
+    print_banner()
+    t = ticker.upper()
+    print(f"🔬 BẮT ĐẦU WALK-FORWARD ANALYSIS (WFA) CHO MÃ: [{t}]")
+    print(f"   • Số bước trượt: {n_splits} folds | Chế độ: {window_type.upper()}")
+
+    from core.backtest.runner import BacktestRunner
+    from core.backtest.strategy_template import VSAMomentumStrategy
+    from core.backtest.report_adapter import BacktestReportAdapter
+
+    runner = BacktestRunner()
+    wfa_res = runner.run_walk_forward_analysis(
+        strategy_class=VSAMomentumStrategy,
+        tickers=t,
+        days=1250,
+        n_splits=n_splits,
+        window_type=window_type,
+        strategy_name=f"VSA Momentum ({t})"
+    )
+
+    summary = wfa_res["summary"]
+    print(f"\n🏆 KẾT QUẢ WALK-FORWARD ANALYSIS ({wfa_res['n_splits']} FOLDS):")
+    print(f"   • Phán quyết:             [{wfa_res['verdict']}]")
+    print(f"   • WFE Sharpe:             {summary['wfe_sharpe_pct']:.1f}% (Hệ số bảo toàn hiệu suất OOS)")
+    print(f"   • Sharpe OOS Trung bình:  {summary['avg_oos_sharpe']:.2f} (Sharpe IS TB: {summary['avg_is_sharpe']:.2f})")
+    print(f"   • CAGR OOS Trung bình:    {summary['avg_oos_cagr_pct']:+.2f}%/năm")
+    print(f"   • Max Drawdown OOS TB:    {summary['avg_oos_mdd_pct']:.2f}%")
+    print(f"   • Số Folds OOS Có Lãi:    {summary['profitable_folds']}/{summary['total_folds']} ({summary['profitable_folds_pct']:.1f}%)")
+    print(f"   • Nhận định:              {wfa_res['assessment']}")
+
+    print("\n📋 CHI TIẾT TỪNG BƯỚC TRƯỢT (FOLDS):")
+    for f in wfa_res["folds"]:
+        is_m = f["in_sample"]
+        oos_m = f["out_of_sample"]
+        print(f"   • Fold #{f['fold']}: IS Sharpe {is_m['sharpe']:.2f} -> OOS Sharpe {oos_m['sharpe']:.2f} (Bảo toàn: {f['sharpe_retention_pct']:.1f}%, MDD: {oos_m['mdd_pct']:.1f}%, Win: {oos_m['win_rate_pct']:.1f}%)")
+
+    # Xuất báo cáo Markdown
+    out_dir = settings.BASE_DIR / ".agent" / "journals"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report_file = out_dir / f"wfa_report_{t.lower()}_{window_type}_{date.today().strftime('%Y%m%d')}.md"
+    BacktestReportAdapter.generate_walk_forward_markdown_report(wfa_res, output_path=report_file)
+    print(f"\n📄 Đã lưu báo cáo chi tiết: {report_file}")
 
 def main():
     parser = argparse.ArgumentParser(description="Bộ Điều Phối Trung Tâm Quỹ Đầu Tư AI (Antigravity Orchestrator)")
     parser.add_argument("--status", action="store_true", help="Xem báo cáo tổng quan tình trạng Quỹ")
     parser.add_argument("--workflow", choices=["morning", "debate", "eod", "triage"], help="Kích hoạt một quy trình làm việc SOP (morning, debate, eod, triage)")
-    parser.add_argument("--ticker", default="HPG", help="Mã cổ phiếu dùng cho workflow debate/triage (mặc định HPG)")
+    parser.add_argument("--ticker", default="HPG", help="Mã cổ phiếu dùng cho workflow debate/triage/wfa (mặc định HPG)")
     parser.add_argument("--book", choices=["CORE", "QUANT"], default="QUANT", help="Sổ chiến lược: CORE (Fundamental) hoặc QUANT (Trading)")
     parser.add_argument("--optimize", nargs="?", const="vsa-momentum", help="Kích hoạt Động cơ Tự học & Tiến hóa chiến lược (ví dụ: --optimize vsa-momentum)")
+    parser.add_argument("--wfa", action="store_true", help="Chạy Walk-Forward Analysis (WFA) kiểm định độ bền vững trượt của chiến lược")
+    parser.add_argument("--splits", type=int, default=4, help="Số folds bước trượt cho WFA (mặc định: 4)")
+    parser.add_argument("--window-type", choices=["rolling", "expanding"], default="rolling", help="Chế độ cửa sổ WFA: rolling hoặc expanding (mặc định: rolling)")
     parser.add_argument("--serve-dashboard", action="store_true", help="Khởi chạy Web Dashboard server (cổng 8000)")
     
     args = parser.parse_args()
 
     if args.status:
         show_status()
+    elif args.wfa:
+        run_wfa_cli(ticker=args.ticker, n_splits=args.splits, window_type=args.window_type)
     elif args.optimize:
-        from tools.strategy_optimizer import StrategyOptimizerEngine
+        from core.backtest.strategy_optimizer import StrategyOptimizerEngine
         print_banner()
         engine = StrategyOptimizerEngine()
         engine.auto_heal_vsa_strategy(ticker=args.ticker)
@@ -470,7 +534,7 @@ def main():
         import uvicorn
         print_banner()
         print("🌐 Đang khởi chạy Web Dashboard tại http://localhost:8000 ...")
-        uvicorn.run("dashboard.api:app", host="0.0.0.0", port=8000, reload=False)
+        uvicorn.run("apps.api.main:app", host="0.0.0.0", port=8000, reload=False)
     else:
         show_status()
 

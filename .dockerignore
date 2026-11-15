@@ -8,24 +8,35 @@
 
 # Python cache & venv
 __pycache__
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 .venv
 venv
 env
 .pytest_cache
 
-# Node modules & local build
+# Node modules & local build (Bảo vệ container không bị đè bởi local binary)
 node_modules
-dashboard/frontend/node_modules
-dashboard/frontend/dist
+**/node_modules
+dist
+**/dist
+.vite
+**/.vite
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # IDEs & OS
 .DS_Store
+.DS_Store?
+._*
 .idea
 .vscode
 
 # Data & database (Đã được mount qua volumes trong docker-compose)
 *.parquet
+data/*.parquet
+*.db
 database/*.db
+database/*.sqlite*
+storage/

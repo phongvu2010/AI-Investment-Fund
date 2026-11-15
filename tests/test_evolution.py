@@ -14,9 +14,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
 import pytest
-from tools.strategy_optimizer import StrategyOptimizerEngine
+from core.backtest.strategy_optimizer import StrategyOptimizerEngine
 from fastapi.testclient import TestClient
-from dashboard.api import app
+from apps.api.main import app
 
 def test_diagnose_failure():
     engine = StrategyOptimizerEngine()

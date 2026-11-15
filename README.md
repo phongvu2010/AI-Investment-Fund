@@ -85,61 +85,42 @@ Hệ thống phân tách vốn rõ ràng thành 2 phân hệ độc lập:
 
 ---
 
-## 3. CẤU TRÚC THƯ MỤC HỆ THỐNG
+## 3. CẤU TRÚC THƯ MỤC HỆ THỐNG (FULL STACK AI MONOREPO ARCHITECTURE)
 
 ```
 AI Investment Fund/
-├── .agent/                       # Não bộ tổ chức Multi-Agent
-│   ├── agents/                   # 9 vị trí nhân sự AI chuyên trách
+├── .agent/                       # Não bộ tổ chức Multi-Agent & Knowledge Base
+│   ├── agents/                   # 9 vị trí nhân sự AI chuyên trách (CIO, CRO, Bull/Bear...)
 │   ├── rules/                    # Hiến chương Quỹ, Quy chế thực thi & Bộ hạn mức rủi ro
 │   ├── workflows/                # 5 Quy trình SOP chuẩn (Morning, Debate, Execution, EOD, Post-Mortem)
 │   ├── skills/                   # Kho Kỹ năng Chiến lược đầu tư (strategy-vsa-momentum, valuation-dcf)
 │   └── journals/                 # Nhật ký Tiến hóa & Khám nghiệm thất bại (Post-Mortem Memos)
-├── backtest/                     # Động cơ Backtest chuẩn sàn VN (vn-backtest)
-│   ├── runner.py                 # Bộ thực thi kiểm thử 5 năm & xuất biểu đồ Plotly tương tác HTML
-│   ├── report_adapter.py         # Thẩm định Hội đồng CRO & biên tập Markdown
-│   └── strategy_template.py      # Lớp cơ sở BaseFundStrategy & chỉ báo Polars
-├── config/                       # Cấu hình tham số hệ thống (settings.py)
-├── dashboard/                    # Web Dashboard Zero-Token
-│   ├── api.py                    # Backend REST API (FastAPI)
-│   ├── reports/                  # Thư mục lưu biểu đồ Plotly tương tác HTML
-│   └── frontend/                 # Giao diện người dùng (React 19 + Vite + Tailwind CSS)
-├── data/                         # Kho dữ liệu định lượng Parquet
-│   ├── market_history_5y.parquet # Dữ liệu lịch sử 5 năm toàn thị trường (ZSTD nén)
-│   ├── fundamental_quarterly.parquet # Dữ liệu BCTC & chỉ số tài chính các quý
-│   └── ml_dataset_train.parquet  # Ma trận 15 đặc trưng & nhãn Triple-Barrier ML
-├── database/                     # Kho lưu trữ SQLite bất biến
-│   ├── schema.sql                # Định nghĩa 6 bảng CSDL chuẩn mực + guardrail_audit_log
-│   ├── fund_vault.db             # File SQLite lưu sổ lệnh, portfolio, NAV daily
-│   └── db_manager.py             # Kế toán giao dịch, tính giá bình quân gia quyền WAC
-├── harness/                      # Khung Kiểm Soát & Điều Phối An Toàn (Harness Engineering)
-│   ├── context_manager.py        # Tiêm bối cảnh quỹ & khí tượng thị trường vào Prompt
-│   ├── guardrail_middleware.py   # Bộ lọc quyền hạn & Veto cứng (Hard Veto & Circuit Breaker)
-│   └── verification_loop.py      # Vòng lặp kiểm định mã hóa & tự khắc phục (Auto-Healing)
-├── interfaces/                   # Kênh giao tiếp Người - Máy
-│   ├── telegram_bot.py           # Bot Telegram tương tác 1 chạm & bóc tách /fill
-│   └── message_templates.py      # Mẫu tin nhắn Tờ trình đầu tư 2 chiều Bull/Bear
-├── models/                       # Thư mục chứa mô hình Machine Learning (.joblib)
+├── apps/                         # Toàn bộ Tầng Ứng dụng & Serving (Client Touchpoints & APIs)
+│   ├── api/                      # Backend Dịch Vụ REST API & Web Server (FastAPI)
+│   │   ├── main.py               # FastAPI Application phục vụ Dashboard & Data Contracts
+│   │   └── static/reports/       # Biểu đồ tương tác Plotly HTML xuất từ vn-backtest
+│   ├── bot/                      # Co-Pilot Di động: Telegram Bot 1-Touch Approval (/fill)
+│   └── web/                      # Web Dashboard: React 19 + Vite + Tailwind CSS
+├── ai_brain/                     # Hệ Thống Suy Luận & Phản Xạ AI (System 1 & System 2)
+│   ├── engines/                  # Động cơ phản xạ Jev Decision (<500ms) & Tranh biện Bull/Bear
+│   └── harness/                  # Khung Kiểm Soát An Toàn (Guardrail Veto, Verification Loop, Context)
+├── core/                         # Động Cơ Định Lượng & Kế Toán Zero-Token (0 Token Engine)
+│   ├── accounting/               # Quản trị sổ lệnh, danh mục, Mark-to-Market, thuế phí NĐ 126
+│   ├── backtest/                 # Động cơ kiểm định vn-backtest, Report Adapter & Tối ưu hóa
+│   ├── data/                     # Quản trị dữ liệu Parquet, BigQuery Sync, Intraday Feed & Importer
+│   ├── quant/                    # Machine Learning (LightGBM Alpha Model) & Sàng lọc BCTC
+│   └── scheduler/                # Bộ lập lịch tự động kích hoạt cronjob hàng ngày
+├── config/                       # Cấu hình tham số hệ thống & môi trường (settings.py)
+├── data/                         # Kho dữ liệu định lượng Parquet 5 năm & BCTC
+├── database/                     # CSDL lưu trữ SQLite vĩnh viễn (fund_vault.db & schema.sql)
+├── models/                       # Thư mục lưu trọng số mô hình Machine Learning (.joblib)
 ├── notebooks/                    # Jupyter Notebook huấn luyện trên Kaggle / Colab
 ├── tests/                        # 9 Bộ Test Suites kiểm thử tự động toàn diện (54 tests)
-├── tools/                        # Bộ công cụ định lượng & tự động hóa
-│   ├── bigquery_sync.py          # Đồng bộ BigQuery -> Parquet 5 năm & nến ngày
-│   ├── fundamental_screener.py   # Sàng lọc cơ bản, chấm điểm sức khỏe BCTC
-│   ├── intraday_data_feed.py     # Nạp và kiểm định luồng nến trong phiên (Intraday)
-│   ├── investment_debate_engine.py # Động cơ điều phối tranh biện 2 chiều Bull/Bear
-│   ├── jev_decision_engine.py    # Hệ thống phản xạ quyết định Jev AI System 1 (<500ms)
-│   ├── ml_feature_extractor.py   # Trích xuất 15 đặc trưng kỹ thuật & nhãn 3 rào cản
-│   ├── ml_model_trainer.py       # Huấn luyện nhanh Universal Alpha Model (LightGBM)
-│   ├── ml_predictor.py           # Động cơ suy luận chấm điểm Alpha Score < 0.005s
-│   ├── parquet_manager.py        # Truy vấn Parquet siêu tốc bằng DuckDB & Polars
-│   ├── scheduler.py              # Bộ lập lịch tự động kích hoạt cronjob hàng ngày
-│   ├── strategy_generator.py     # Đóng gói chiến lược thành Agent Skill chuẩn
-│   ├── strategy_optimizer.py     # Động cơ Tự học hỏi, Sửa sai & Tối ưu hóa tham số
-│   └── transaction_importer.py   # Replay 1.710 giao dịch lịch sử, cân bằng vốn gốc
 ├── main.py                       # Bộ điều phối trung tâm (CLI Orchestrator)
-├── Dockerfile                    # Đóng gói Container độc lập môi trường
+├── pytest.ini                    # Cấu hình kiểm thử chuẩn hóa tự động nhận diện root path
+├── Dockerfile                    # Multi-stage Containerization độc lập môi trường
 ├── docker-compose.yml            # Khởi chạy toàn bộ hệ thống bằng 1 câu lệnh
-└── requirements.txt              # Danh sách thư viện Python
+└── requirements.txt              # Danh sách thư viện Python đồng bộ
 ```
 
 ---
@@ -157,7 +138,7 @@ AI Investment Fund/
    ```
 3. **Cài đặt và Build Frontend Dashboard:**
    ```bash
-   cd dashboard/frontend
+   cd apps/web
    npm install
    npm run build
    cd ../..
@@ -246,7 +227,7 @@ python3 main.py --workflow eod
 
 ### 7.1 Jev Decision Engine (System 1)
 ```python
-from tools.jev_decision_engine import JevDecisionEngine
+from ai_brain.engines.jev_decision_engine import JevDecisionEngine
 
 jev = JevDecisionEngine()
 # Phân loại sự kiện nhị phân (<500ms, 0 Token)
